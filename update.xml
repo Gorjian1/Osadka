@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<item>
+	<!-- 1. При каждом новом релизе увеличиваете только эту версию -->
+	<version>0.3.0.0</version>
+
+	<!-- 2. И меняете URL на ZIP с этим же тегом -->
+	<url>https://github.com/Gorjian1/Osadka/releases/latest/download/OsadkaLts.zip</url>
+
+	<!-- 3. (Опционально) Ссылку на страницу релиза с описанием изменений -->
+	<changelog>https://github.com/Gorjian1/Osadka/releases/tag/v0.2.0</changelog>
+
+	<!-- 4. Флаг обязательного обновления (false/true) -->
+	<mandatory>false</mandatory>
+</item>
