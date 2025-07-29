@@ -1,7 +1,8 @@
-﻿using System;
+﻿using AutoUpdaterDotNET;
+using Osadka.Services;
+using System;
 using System.Threading.Tasks;
 using System.Windows;
-using Osadka.Services;
 
 namespace Osadka
 {
@@ -20,34 +21,8 @@ namespace Osadka
 
         private async void OnCheckUpdateClick(object sender, RoutedEventArgs e)
         {
-            var current = UpdateService.CurrentVersion;
-            Version latest;
+            AutoUpdater.Start(UpdateService.ManifestUrl);
 
-            try
-            {
-                latest = await UpdateService.GetLatestVersionAsync();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Не удалось проверить обновления:\n{ex.Message}",
-                                "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
-            }
-
-            string msg;
-            var icon = MessageBoxImage.Information;
-
-            if (latest > current)
-            {
-                msg = $"Доступна новая версия: {latest}. Текущая: {current}.";
-                icon = MessageBoxImage.Warning;
-            }
-            else
-            {
-                msg = $"Вы используете последнюю версию: {current}.";
-            }
-
-            MessageBox.Show(msg, "Проверка обновлений", MessageBoxButton.OK, icon);
         }// В файле MainWindow.xaml.cs, внутри класса MainWindow
         private async void OnTestReportClick(object sender, RoutedEventArgs e)
         {
