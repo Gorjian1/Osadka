@@ -43,6 +43,9 @@
 #*.jpg   binary
 #*.png   binary
 #*.gif   binary
+*.application  binary diff=astextplain
+*.manifest     binary diff=astextplain
+*.deploy       binary diff=astextplain
 
 ###############################################################################
 # diff behavior for common document formats
