@@ -38,6 +38,9 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
+    <None Remove="..\Updater\bin\Debug\net8.0\Updater.exe" />
+  </ItemGroup>
+  <ItemGroup>
     <None Include="..\Updater\bin\$(Configuration)\net8.0\Updater.exe">
       <Link>Updater.exe</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
