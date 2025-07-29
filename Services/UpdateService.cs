@@ -13,7 +13,6 @@ namespace Osadka.Services
 
         public static Version CurrentVersion =>
             Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0, 0);
-
         public static string CurrentVersionString => CurrentVersion.ToString();
 
         public static async Task<Version> GetLatestVersionAsync()
