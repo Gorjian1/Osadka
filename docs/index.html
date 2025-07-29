@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Загрузка Osadka</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 50px auto; }
+    input { width: 100%; padding: 8px; font-size: 1rem; box-sizing: border-box; }
+    button { margin-top: 10px; padding: 10px 20px; font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Osadka — скачать вручную</h1>
+  <p>Вставьте ссылку на файл и нажмите «Скачать»:</p>
+  <input id="urlInput" type="url" placeholder="https://example.com/Osadka.exe" />
+  <button id="downloadBtn">Скачать</button>
+
+  <script>
+    const input = document.getElementById('urlInput');
+    const btn   = document.getElementById('downloadBtn');
+
+    btn.addEventListener('click', () => {
+      const url = input.value.trim();
+      if (!url) {
+        alert('Пожалуйста, введите корректную ссылку.');
+        return;
+      }
+      // Перенаправляем браузер на введённый URL — начнётся загрузка
+      window.location.href = url;
+    });
+
+    // Чтобы по Enter работало
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') btn.click();
+    });
+  </script>
+</body>
+</html>
