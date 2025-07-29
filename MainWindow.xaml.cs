@@ -1,6 +1,8 @@
 ﻿using AutoUpdaterDotNET;
 using Osadka.Services;
+using Osadka.ViewModels;
 using System;
+using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -8,16 +10,24 @@ namespace Osadka
 {
     public partial class MainWindow : Window
     {
+        private readonly MainViewModel _vm;
         public string VersionInfo { get; }
 
         public MainWindow()
         {
             InitializeComponent();
             DataContext = this;
+            InitializeComponent();
+            _vm = new MainViewModel();
+            DataContext = _vm;
 
+            this.Closing += MainWindow_Closing;
             VersionInfo = $"Текущая версия: {UpdateService.CurrentVersionString}";
         }
+        private void MainWindow_Closing(object? sender, CancelEventArgs e)
+        {
 
+        }
         private async void OnCheckUpdateClick(object sender, RoutedEventArgs e)
         {
             if (!Uri.TryCreate(UpdateService.ManifestUrl, UriKind.Absolute, out var uri) ||

@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="Current">
   <PropertyGroup>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
+	<SquirrelReleaseDir>$(ProjectDir)releases\</SquirrelReleaseDir>
+	  <SquirrelExe>$(SolutionDir)packages\Squirrel.Windows.1.9.1\tools\Squirrel.exe</SquirrelExe>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
@@ -10,6 +12,7 @@
     <FileUpgradeFlags>40</FileUpgradeFlags>
     <UpgradeBackupLocation>C:\Users\Gorji\source\repos\Osadkaend\Backup\</UpgradeBackupLocation>
     <OldToolsVersion>Current</OldToolsVersion>
+	  
   </PropertyGroup>
   <ItemGroup>
     <None Remove="help.docx" />
@@ -22,6 +25,7 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
+	  
     <PackageReference Include="ACadSharp" Version="3.0.8" />
     <PackageReference Include="Autoupdater.NET.Official" Version="1.9.2" />
     <PackageReference Include="ClosedXML" Version="0.105.0" />
@@ -30,6 +34,7 @@
     <PackageReference Include="OxyPlot.Wpf" Version="2.2.0" />
     <PackageReference Include="ScottPlot" Version="5.0.55" />
     <PackageReference Include="ScottPlot.WPF" Version="5.0.55" />
+    <PackageReference Include="squirrel.windows" Version="2.0.1" />
     <PackageReference Include="Telegram.Bot" Version="22.6.0" />
   </ItemGroup>
   <ItemGroup>
@@ -37,4 +42,13 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+	<Target Name="SquirrelReleasify" AfterTargets="Publish">
+  <Message Text="→ Squirrel: releasify $(PublishDir)Osadka.exe → $(SquirrelReleaseDir)" Importance="high"/>
+  <Exec
+    Command="&quot;$(SquirrelExe)&quot; --releasify &quot;$(PublishDir)Osadka.exe&quot; --output-dir &quot;$(SquirrelReleaseDir)&quot;"
+    WorkingDirectory="$(ProjectDir)" />
+		<Message Text="→ Squirrel: releasify $(PublishDir)Osadka.exe → $(SquirrelReleaseDir)" Importance="high" />
+		<Exec Command="&quot;$(SquirrelExe)&quot; --releasify &quot;$(PublishDir)Osadka.exe&quot; --output-dir &quot;$(SquirrelReleaseDir)&quot;" WorkingDirectory="$(ProjectDir)" />
+</Target>
+
 </Project>
