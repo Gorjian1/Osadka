@@ -8,8 +8,8 @@
     <UseWPF>true</UseWPF>
     <ApplicationIcon>heavy-rain.ico</ApplicationIcon>
     <FileUpgradeFlags>40</FileUpgradeFlags>
-    <UpgradeBackupLocation>C:\Users\Gorji\source\repos\Osadka\Backup\</UpgradeBackupLocation>
-    <OldToolsVersion>2.0</OldToolsVersion>
+    <UpgradeBackupLocation>C:\Users\Gorji\source\repos\Osadkaend\Backup\</UpgradeBackupLocation>
+    <OldToolsVersion>Current</OldToolsVersion>
   </PropertyGroup>
   <ItemGroup>
     <None Remove="help.docx" />
@@ -36,14 +36,5 @@
     <Content Include="template.xlsx">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-  </ItemGroup>
-  <ItemGroup>
-    <None Remove="..\Updater\bin\Debug\net8.0\Updater.exe" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\Updater\bin\$(Configuration)\net8.0\Updater.exe">
-      <Link>Updater.exe</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
 </Project>
