@@ -10,7 +10,8 @@ namespace Osadka.Services
     {
         // Ссылка на raw update.xml
         public const string ManifestUrl =
-            "https://raw.githubusercontent.com/Gorjian1/Osadka/master/update.xml";
+            "https://raw.githubusercontent.com/Gorjian1/Updates/gh-pages/Osadka.application";
+
 
         // Текущая версия из сборки
         public static Version CurrentVersion =>

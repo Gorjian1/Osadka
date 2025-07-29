@@ -98,7 +98,7 @@
                     <MenuItem Header="_Справка"
           Command="{Binding HelpCommand}">
                         <MenuItem.HeaderTemplate>
-                              <DataTemplate>
+                            <DataTemplate>
                                 <TextBlock Text="Справка"/>
                             </DataTemplate>
                         </MenuItem.HeaderTemplate>
@@ -107,12 +107,16 @@
                         Click="OnTestReportClick"
                         ToolTip="Отправить тестовое сообщение в Telegram"/>
                     <Separator Width="6"/>
-                    <MenuItem Header="Проверить обновления" Click="OnCheckUpdateClick"
-                ToolTip="Сравнить текущую версию с последним релизом"/>
-                    <TextBlock x:Name="VersionText"
-                           VerticalAlignment="Center"
-                           FontStyle="Italic"
-                           Foreground="Gray" Width="80"/>
+
+
+                    <!-- Кнопка проверки обновлений -->
+                    <Button Content="Проверить обновления" 
+                    Click="OnCheckUpdateClick"
+                    Width="150" Height="22"/>
+                    <TextBlock Text="{Binding VersionInfo}" 
+                       Margin="0,0,0,10" 
+                       FontWeight="Bold" 
+                       Foreground="Gray"/>
                 </Menu>
             </DockPanel>
         </Border>

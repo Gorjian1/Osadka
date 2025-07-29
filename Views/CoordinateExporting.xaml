@@ -44,19 +44,7 @@
               Margin="4,0,0,0"
               Click="BtnExport_Click"/>
             <Separator/>
-            <TextBlock Text="Сетка, м:" VerticalAlignment="Center" Margin="6,0,2,0"/>
-            <TextBox Width="60"
-             Text="{Binding GridStep, UpdateSourceTrigger=LostFocus}"
-             VerticalContentAlignment="Center"/>
 
-            <TextBlock Text="Шаг изол., мм:" VerticalAlignment="Center" Margin="6,0,2,0"/>
-            <TextBox Width="50"
-             Text="{Binding IsoStep, UpdateSourceTrigger=LostFocus}"
-             VerticalContentAlignment="Center"/>
-
-            <Button x:Name="BtnBuildMap"
-            Content="Карта осадков"
-            Click="BtnBuildMap_Click"/>
         </ToolBar>
 
         <ScrollViewer x:Name="Viewport"

@@ -15,20 +15,30 @@ namespace Osadka
             InitializeComponent();
             DataContext = this;
 
-            // Используем UpdateService для версии
             VersionInfo = $"Текущая версия: {UpdateService.CurrentVersionString}";
         }
 
         private async void OnCheckUpdateClick(object sender, RoutedEventArgs e)
         {
-            AutoUpdater.Start(UpdateService.ManifestUrl);
+            if (!Uri.TryCreate(UpdateService.ManifestUrl, UriKind.Absolute, out var uri) ||
+                !(uri.Host.Equals("raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase) ||
+                  uri.Host.EndsWith("github.io", StringComparison.OrdinalIgnoreCase)))
+            {
+                MessageBox.Show(
+                    $"Обнаружен недопустимый источник обновлений:\n{UpdateService.ManifestUrl}",
+                    "Ошибка обновления",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return;
+            }
 
-        }// В файле MainWindow.xaml.cs, внутри класса MainWindow
+            AutoUpdater.Start(UpdateService.ManifestUrl);
+        }
+
         private async void OnTestReportClick(object sender, RoutedEventArgs e)
         {
             try
             {
-                // Отправляем тестовое сообщение
                 await TelegramReporter.SendAsync("Тестовое сообщение: отчёт из Osadka ✔️");
                 MessageBox.Show(
                     "Тестовое сообщение отправлено.",
