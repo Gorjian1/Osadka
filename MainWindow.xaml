@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Osadka"
         mc:Ignorable="d"
         WindowState="Maximized"
         Title="Osadka" Height="720" Width="1200" MinHeight="500" MinWidth="900"
@@ -96,27 +97,17 @@
 
                     <Separator Width="6"/>
                     <MenuItem Header="_Справка"
+
           Command="{Binding HelpCommand}">
+                        <Separator Width="6"/>
+
                         <MenuItem.HeaderTemplate>
                             <DataTemplate>
                                 <TextBlock Text="Справка"/>
                             </DataTemplate>
                         </MenuItem.HeaderTemplate>
                     </MenuItem>
-                    <MenuItem Header="Отчёт (тест)" 
-                        Click="OnTestReportClick"
-                        ToolTip="Отправить тестовое сообщение в Telegram"/>
-                    <Separator Width="6"/>
-
-
-                    <!-- Кнопка проверки обновлений -->
-                    <Button Content="Проверить обновления" 
-                    Click="OnCheckUpdateClick"
-                    Width="150" Height="22"/>
-                    <TextBlock Text="{Binding VersionInfo}" 
-                       Margin="0,0,0,10" 
-                       FontWeight="Bold" 
-                       Foreground="Gray"/>
+                    <TextBlock Text="{x:Static local:VersionProvider.Current}" />
                 </Menu>
             </DockPanel>
         </Border>
@@ -127,10 +118,23 @@
             </Border.Effect>
 
             <StackPanel>
+
                 <StackPanel>
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,10,0,1">
+                        <CheckBox Content="Общий"
+                  IsChecked="{Binding IncludeGeneral, Mode=TwoWay}"
+                  Margin="0,0,16,0"/>
+                        <CheckBox Content="Отн."
+                  IsChecked="{Binding IncludeRelative, Mode=TwoWay}"
+                  Margin="0,0,16,0"/>
+                        <CheckBox Content="Графики"
+                  IsChecked="{Binding IncludeGraphs, Mode=TwoWay}"/>
+                    </StackPanel>
                     <Separator Margin="10,7" />
                 </StackPanel>
-                <Button Style="{StaticResource ToolbarBtn}" Content="📢 Быстрый отчёт 📢" FontSize="20" Command="{Binding QuickReportCommand}" Height="46"/>
+
+                <Button Style="{StaticResource ToolbarBtn}" Content="📢 Создать отчёт 📢" FontSize="20" Command="{Binding QuickReportCommand}" Height="46"/>
+                
                 <StackPanel>
                     <Separator Margin="10,7" />
                 </StackPanel>
@@ -157,6 +161,10 @@
     </Grid>
     <Window.InputBindings>
         <KeyBinding Key="V" Modifiers="Control" Command="{Binding PasteProxyCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="V"
+                Command="{Binding RawVM.PasteCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="S"
+                Command="{Binding SaveProjectCommand}" />
     </Window.InputBindings>
 
 </Window>

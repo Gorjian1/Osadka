@@ -4,121 +4,294 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:conv="clr-namespace:Osadka.Converters"
-             AllowDrop="True"
-             DragOver="Control_DragOver"
-             Drop="Control_Drop"
-             mc:Ignorable="d"
-             d:DesignHeight="600" d:DesignWidth="900">
+             mc:Ignorable="d">
 
     <UserControl.Resources>
-        <conv:PositiveToVisibleConverter x:Key="PositiveToVisible"/>
-        <conv:ZeroToVisibleConverter     x:Key="ZeroToVisible"/>
         <conv:RelaxedDoubleConverter x:Key="RelaxedDouble"/>
-        <Style x:Key="RightAlign" TargetType="TextBlock">
-            <Setter Property="HorizontalAlignment" Value="Right"/>
-            <Setter Property="Margin" Value="0,0,4,0"/>
+        <conv:RelaxedDoubleConverter x:Key="RelaxedDoubleConverter"/>
+        <Style x:Key="FastGrid" TargetType="{x:Type DataGrid}">
+            <Setter Property="AutoGenerateColumns" Value="False"/>
+            <Setter Property="CanUserAddRows" Value="False"/>
+            <Setter Property="CanUserDeleteRows" Value="False"/>
+            <Setter Property="IsReadOnly" Value="False"/>
+            <Setter Property="EnableRowVirtualization" Value="True"/>
+            <Setter Property="EnableColumnVirtualization" Value="True"/>
+            <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True"/>
+            <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling"/>
+            <Setter Property="VirtualizingPanel.ScrollUnit" Value="Pixel"/>
+            <Setter Property="ScrollViewer.CanContentScroll" Value="True"/>
+            <Setter Property="ScrollViewer.IsDeferredScrollingEnabled" Value="True"/>
+            <Setter Property="HeadersVisibility" Value="All"/>
+            <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+            <Setter Property="SelectionUnit" Value="CellOrRowHeader"/>
+            <Setter Property="RowHeaderWidth" Value="0"/>
+        </Style>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <Style x:Key="CellText" TargetType="{x:Type TextBlock}">
+            <Setter Property="Margin" Value="4,2"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style x:Key="CellEdit" TargetType="{x:Type TextBox}">
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Padding" Value="2"/>
+        </Style>
+
+        <SolidColorBrush x:Key="AccentBrush" Color="#FFC8E4FF"/>
+        <SolidColorBrush x:Key="AccentBrushHover" Color="#FFA3CEF6"/>
+        <SolidColorBrush x:Key="AccentBrushPressed" Color="#FF65A3DD"/>
+
+        <Style x:Key="ToolbarAccentButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Static ToolBar.ButtonStyleKey}}">
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentBrushHover}"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource AccentBrushHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentBrushPressed}"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource AccentBrushPressed}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ToolbarLabel" TargetType="{x:Type TextBlock}">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+        </Style>
+        <Style x:Key="ToolbarBox" TargetType="{x:Type ComboBox}">
+            <Setter Property="Width" Value="120"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+        <Style x:Key="ToolbarText" TargetType="{x:Type TextBox}">
+            <Setter Property="Width" Value="140"/>
+            <Setter Property="Margin" Value="0,0,12,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
     </UserControl.Resources>
 
-    <Grid>
-        <ToolBar VerticalAlignment="Top" Background="#F9FBFD" BorderThickness="0,0,0,1" BorderBrush="#D7D7D7">
-            <Button Content="🗂 Подключить книгу" Command="{Binding LoadFromWorkbookCommand}"/>
-            <Separator/>
-            <Button Content="Вставить (Ctrl+V)" Command="{Binding PasteCommand}"/>
-            <Separator/>
-            <Button Content="🗑 Очистить" Command="{Binding ClearCommand}"/>
-        </ToolBar>
+    <Grid RenderTransformOrigin="0.501,0.506">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" MinHeight="45.96"/>
+            <RowDefinition Height="Auto" MinHeight="33"/>
+            <RowDefinition/>
+        </Grid.RowDefinitions>
 
-        <Grid Margin="0,70,0,0">
+        <ToolBarTray Grid.Row="0" Margin="8,8,8,7">
+            <ToolBar RenderTransformOrigin="0.473,0.517" Margin="-8,0,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="0*"/>
+                        <ColumnDefinition Width="12.137"/>
+                        <ColumnDefinition Width="Auto" MinWidth="553"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Grid.ColumnSpan="2" Margin="0,0,15,0">
+                        <Button Style="{StaticResource ToolbarAccentButton}" Content="📗 Загрузить Excel"
+                                Command="{Binding LoadFromWorkbookCommand}"/>
+                        <Separator Margin="5,0"/>
+                        <Button Style="{StaticResource ToolbarAccentButton}" Content="Вставить (Ctrl+V)"
+                                Command="{Binding PasteCommand}"/>
+                        <Separator Margin="5,0"/>
+                        <Button Style="{StaticResource ToolbarAccentButton}" Content="Очистить"
+                                Command="{Binding ClearCommand}"/>
+                        <Separator Margin="8,0"/>
+                        <Button Style="{StaticResource ToolbarAccentButton}" Content="Открыть шаблон"
+                                Command="{Binding OpenTemplate}" Background="#FFD7E4F4"/>
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="3" Text="{Binding SelectedCycleHeader}" Opacity="0.75"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" Height="16" Width="0"/>
+                    <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Center" Width="498">
+                        <TextBlock Style="{StaticResource ToolbarLabel}" Text="Объект №"/>
+                        <ComboBox Style="{StaticResource ToolbarBox}"
+                                  ItemsSource="{Binding ObjectNumbers}"
+                                  SelectedItem="{Binding Header.ObjectNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
+
+                        <TextBlock Style="{StaticResource ToolbarLabel}" Text="Цикл №"/>
+                        <ComboBox Style="{StaticResource ToolbarBox}"
+                                ItemsSource="{Binding CycleNumbers}"
+                                SelectedValuePath="."
+                                 SelectedValue="{Binding Header.CycleNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
+
+                        <TextBlock Style="{StaticResource ToolbarLabel}" Text="Единицы"/>
+                        <ComboBox Style="{StaticResource ToolbarBox}"
+                                  ItemsSource="{Binding CoordUnitValues}"
+                                  SelectedItem="{Binding CoordUnit, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+                </Grid>
+            </ToolBar>
+        </ToolBarTray>
+
+        <ToolBarTray Margin="0,46,8,26" Grid.RowSpan="3">
+            <ToolBar Margin="0,5,0,5">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource ToolbarLabel}" Text="Макс.Пред. СП:"/>
+                    <TextBox Width="80"
+                 Text="{Binding Header.MaxNomen, Mode=TwoWay,Converter={StaticResource RelaxedDouble}, UpdateSourceTrigger=LostFocus}"/>
+                    <Separator/>
+
+                    <TextBlock Style="{StaticResource ToolbarLabel}" Text="   Макс.Пред. расчёт:"/>
+                    <TextBox Width="80"
+                 Text="{Binding Header.MaxCalculated, Mode=TwoWay,Converter={StaticResource RelaxedDouble}, UpdateSourceTrigger=LostFocus}" />
+                    <Separator/>
+
+                    <TextBlock Style="{StaticResource ToolbarLabel}" Text="   Отн.Пред. СП:"/>
+
+                    <TextBox Width="80"
+                 Text="{Binding Header.RelNomen, Mode=TwoWay,Converter={StaticResource RelaxedDouble}, UpdateSourceTrigger=LostFocus}"/>
+                    <Separator/>
+
+                    <TextBlock Style="{StaticResource ToolbarLabel}" Text="   Отн. Пред, расчёт:"/>
+                    <TextBox Width="80"
+                 Text="{Binding Header.RelCalculated, Mode=TwoWay,Converter={StaticResource RelaxedDouble}, UpdateSourceTrigger=LostFocus}"/>
+                </StackPanel>
+            </ToolBar>
+        </ToolBarTray>
+
+        <Grid Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition/>
+                <RowDefinition Height="17*"/>
+                <RowDefinition Height="13*"/>
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="364*"/>
-                <ColumnDefinition Width="95*"/>
-                <ColumnDefinition Width="441*"/>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <DataGrid AutoGenerateColumns="False"
-          ItemsSource="{Binding DataRows}">
-
+            <DataGrid Grid.Column="0"
+                      Style="{StaticResource FastGrid}"
+                      ItemsSource="{Binding DataRows}"
+                      FrozenColumnCount="1" Grid.RowSpan="3">
                 <DataGrid.Columns>
+                    <DataGridTextColumn Header="№"
+                                        Binding="{Binding Id}"
+                                        Width="60"
+                                        IsReadOnly="False">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CellText}">
+                                <Setter Property="TextAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                        <DataGridTextColumn.EditingElementStyle>
+                            <Style TargetType="TextBox" BasedOn="{StaticResource CellEdit}">
+                                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.EditingElementStyle>
+                    </DataGridTextColumn>
 
                     <DataGridTextColumn Header="Отметка, м"
-                            Binding="{Binding MarkDisplay}"/>
+                                        Binding="{Binding MarkRaw}"
+                                        Width="*">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CellText}">
+                                <Setter Property="TextAlignment" Value="Right"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                        <DataGridTextColumn.EditingElementStyle>
+                            <Style TargetType="TextBox" BasedOn="{StaticResource CellEdit}">
+                                <Setter Property="HorizontalContentAlignment" Value="Right"/>
+                            </Style>
+                        </DataGridTextColumn.EditingElementStyle>
+                    </DataGridTextColumn>
 
                     <DataGridTextColumn Header="Осадка, мм"
-                            Binding="{Binding SettlDisplay}"/>
+                                        Binding="{Binding SettlRaw}"
+                                        Width="*">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CellText}">
+                                <Setter Property="TextAlignment" Value="Right"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                        <DataGridTextColumn.EditingElementStyle>
+                            <Style TargetType="TextBox" BasedOn="{StaticResource CellEdit}">
+                                <Setter Property="HorizontalContentAlignment" Value="Right"/>
+                            </Style>
+                        </DataGridTextColumn.EditingElementStyle>
+                    </DataGridTextColumn>
 
-                    <DataGridTextColumn Header="Общая, мм"
-                            Binding="{Binding TotalDisplay}"/>
-
-                    <DataGridTextColumn Header="№ марки"
-                            Binding="{Binding Id}"/>
-
+                    <DataGridTextColumn Header="Общая осадка, мм"
+                                        Binding="{Binding TotalRaw}"
+                                        Width="*">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CellText}">
+                                <Setter Property="TextAlignment" Value="Right"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                        <DataGridTextColumn.EditingElementStyle>
+                            <Style TargetType="TextBox" BasedOn="{StaticResource CellEdit}">
+                                <Setter Property="HorizontalContentAlignment" Value="Right"/>
+                            </Style>
+                        </DataGridTextColumn.EditingElementStyle>
+                    </DataGridTextColumn>
                 </DataGrid.Columns>
             </DataGrid>
 
-            <DataGrid Grid.Column="2" ItemsSource="{Binding CoordRows}" AutoGenerateColumns="False"
-                      CanUserAddRows="False" RowHeight="28" HeadersVisibility="Column"
-                      Visibility="{Binding CoordRows.Count, Converter={StaticResource PositiveToVisible}}" Margin="191,0,0,0">
+            <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="#EEE" Grid.RowSpan="3"/>
+
+            <DataGrid Grid.Column="2"
+                      Style="{StaticResource FastGrid}"
+                      ItemsSource="{Binding CoordRows}" Grid.RowSpan="3">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="X" MinWidth="100" Binding="{Binding X}" ElementStyle="{StaticResource RightAlign}"/>
-                    <DataGridTextColumn Header="Y" MinWidth="100" Binding="{Binding Y}" ElementStyle="{StaticResource RightAlign}"/>
+                    <DataGridTextColumn Header="X"
+                                        Binding="{Binding X, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                        Width="*">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CellText}">
+                                <Setter Property="TextAlignment" Value="Right"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                        <DataGridTextColumn.EditingElementStyle>
+                            <Style TargetType="TextBox" BasedOn="{StaticResource CellEdit}">
+                                <Setter Property="HorizontalContentAlignment" Value="Right"/>
+                            </Style>
+                        </DataGridTextColumn.EditingElementStyle>
+                    </DataGridTextColumn>
+
+                    <DataGridTextColumn Header="Y"
+                                        Binding="{Binding Y, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                        Width="*">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CellText}">
+                                <Setter Property="TextAlignment" Value="Right"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                        <DataGridTextColumn.EditingElementStyle>
+                            <Style TargetType="TextBox" BasedOn="{StaticResource CellEdit}">
+                                <Setter Property="HorizontalContentAlignment" Value="Right"/>
+                            </Style>
+                        </DataGridTextColumn.EditingElementStyle>
+                    </DataGridTextColumn>
                 </DataGrid.Columns>
             </DataGrid>
-
-            <TextBlock Grid.ColumnSpan="2" Text="Вставьте данные или координаты (Ctrl+V)"
-                       FontSize="18" Foreground="#999" FontStyle="Italic"
-                       HorizontalAlignment="Left" VerticalAlignment="Center"
-                       Visibility="{Binding ShowPlaceholder, Converter={StaticResource PositiveToVisible}}" Grid.Column="1" Height="24" Width="366"/>
         </Grid>
-        <StackPanel Orientation="Horizontal" Margin="12,28,0,535">
-
-            <StackPanel Width="110" Margin="0,0,12,0">
-                <TextBlock Text="Объект №"/>
-                <ComboBox Width="60"
-          ItemsSource="{Binding ObjectNumbers}"
-          SelectedItem="{Binding Header.ObjectNumber, Mode=TwoWay}"
-          Margin="0,0,12,0"/>
-            </StackPanel>
-
-
-            <StackPanel Width="110" Margin="0,0,12,0">
-                <TextBlock Text="Цикл №"/>
-                <ComboBox Width="60"
-          ItemsSource="{Binding CycleNumbers}"
-          SelectedItem="{Binding Header.CycleNumber, Mode=TwoWay}"/>
-            </StackPanel>
-            <StackPanel Width="120" Margin="0,0,12,0">
-                <TextBlock Text="Предельная, СП"/>
-                <TextBox Width="80"
-                 Text="{Binding Header.MaxNomen, Mode=TwoWay,Converter={StaticResource RelaxedDouble}, UpdateSourceTrigger=LostFocus}"/>
-            </StackPanel>
-
-            <StackPanel Width="123" Margin="0,0,12,0">
-                <TextBlock Text="Предельная, расчёт"/>
-                <TextBox Width="80"
-                 Text="{Binding Header.MaxCalculated, Mode=TwoWay,Converter={StaticResource RelaxedDouble}, UpdateSourceTrigger=LostFocus}"/>
-            </StackPanel>
-
-            <StackPanel Width="135" Margin="0,0,12,0">
-                <TextBlock Text="Отн. предельная, СП"/>
-                <TextBox Width="80"
-                 Text="{Binding Header.RelNomen, Mode=TwoWay,Converter={StaticResource RelaxedDouble}, UpdateSourceTrigger=LostFocus}"/>
-            </StackPanel>
-
-            <StackPanel>
-                <TextBlock Text="Отн. предельная, расчёт"/>
-                <TextBox Width="80"
-                 Text="{Binding Header.RelCalculated, Mode=TwoWay,Converter={StaticResource RelaxedDouble}, UpdateSourceTrigger=LostFocus}"/>
-            </StackPanel>
-        </StackPanel>
-
-
     </Grid>
-
-    <UserControl.InputBindings>
-        <KeyBinding Key="V"
-                Modifiers="Control"
-                Command="{Binding PasteCommand}" />
-    </UserControl.InputBindings>
-
 </UserControl>

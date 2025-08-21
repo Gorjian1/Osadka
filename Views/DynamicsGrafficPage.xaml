@@ -20,9 +20,6 @@
                     
                     <Separator/>
                     
-                    <Button Content="📤 Экспорт"
-              Command="{Binding ExportCommand}"
-               ToolTip="Сохранить данные графика в Excel"/>
                         
             </ToolBar>
             <oxy:PlotView x:Name="plotView"

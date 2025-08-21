@@ -13,7 +13,6 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using CadAttrib = ACadSharp.Entities.AttributeEntity;
 using CadCircle = ACadSharp.Entities.Circle;
 using CadInsert = ACadSharp.Entities.Insert;
@@ -21,20 +20,41 @@ using CadLine = ACadSharp.Entities.Line;
 using CadMText = ACadSharp.Entities.MText;
 using CadPolyline = ACadSharp.Entities.LwPolyline;
 using CadText = ACadSharp.Entities.TextEntity;
+using CadColor = ACadSharp.Color;
+using CadLayer = ACadSharp.Tables.Layer;
 using WpfPoint = System.Windows.Point;
+using WpfColor = System.Windows.Media.Color;
+using WpfBrush = System.Windows.Media.Brush;
+using WpfSolidColorBrush = System.Windows.Media.SolidColorBrush;
 
 namespace Osadka.ViewModels
 {
     public partial class CoordinateExportingViewModel : ObservableObject
     {
-
-        private BitmapSource _cadBitmap;
         private readonly RawDataViewModel _raw;
-        public BitmapSource CadBitmap
+
+        public CoordinateExportingViewModel(RawDataViewModel raw)
         {
-            get => _cadBitmap;
-            set => SetProperty(ref _cadBitmap, value);
+            _raw = raw;
+
+            OpenDwgCommand = new RelayCommand(OpenDwg);
+            ToggleMeasureCmd = new RelayCommand(() => { IsMeasureMode = !IsMeasureMode; if (IsMeasureMode) IsSelectMode = false; });
+            ToggleSelectCmd = new RelayCommand(() => { IsSelectMode = !IsSelectMode; if (IsSelectMode) IsMeasureMode = false; if (!IsSelectMode) SelectedPoints.Clear(); });
+            ExportCoordsCmd = new RelayCommand(ExportCoords);
+            SendToDataCmd = new RelayCommand(SendToData);
         }
+
+        private DrawingImage _cadDrawing;
+        public DrawingImage CadDrawing
+        {
+            get => _cadDrawing;
+            set => SetProperty(ref _cadDrawing, value);
+        }
+
+        public CadDocument Doc { get; private set; }
+
+        public ObservableCollection<WpfPoint> SelectedPoints { get; } = new();
+        public ObservableCollection<PointCollection> Contours { get; } = new();
 
         private double _zoomFactor = 1.0;
         public double ZoomFactor
@@ -43,7 +63,10 @@ namespace Osadka.ViewModels
             set
             {
                 if (SetProperty(ref _zoomFactor, value))
+                {
                     OnPropertyChanged(nameof(EffectiveScale));
+                    if (ConstantScreenThickness) RebuildScene();
+                }
             }
         }
 
@@ -51,127 +74,63 @@ namespace Osadka.ViewModels
         public double EffectiveScale => FitScale * ZoomFactor;
 
         public double PixelsPerUnit { get; private set; }
-        public double ScaleBarPixels =>
-            CadBitmap == null ? 0 : 100 * PixelsPerUnit * EffectiveScale;
-        public string ScaleBarLabel =>
-            CadBitmap == null ? string.Empty : "100 м";
-
         public double MinX { get; private set; }
         public double MinY { get; private set; }
         public double MaxX { get; private set; }
         public double MaxY { get; private set; }
 
+        public double ImageWidthPx => (MaxX - MinX) * PixelsPerUnit;
+        public double ImageHeightPx => (MaxY - MinY) * PixelsPerUnit;
+
+        public double ScaleBarPixels => CadDrawing == null ? 0 : 100 * PixelsPerUnit;
+        public string ScaleBarLabel => CadDrawing == null ? string.Empty : "100 м";
+
         [ObservableProperty] private bool isMeasureMode;
         [ObservableProperty] private bool isSelectMode;
-
-
 
         [ObservableProperty] private double gridStep = 10.0;
         [ObservableProperty] private double isoStep = 5.0;
 
+        [ObservableProperty] private bool constantScreenThickness = true;
+        [ObservableProperty] private double baseStrokePx = 1.2;
 
+        [ObservableProperty] private bool whiteHaloEnabled = true;
+        [ObservableProperty] private double haloExtraPx = 1.0;
 
-        public ObservableCollection<WpfPoint> SelectedPoints { get; } = new();
-        public ObservableCollection<PointCollection> Contours { get; } = new();
+        public class LayerVm : ObservableObject
+        {
+            public string Name { get; }
+            private bool _isVisible = true;
+            public bool IsVisible { get => _isVisible; set => SetProperty(ref _isVisible, value); }
+            public LayerVm(string name, bool visible = true) { Name = name; IsVisible = visible; }
+        }
+        public ObservableCollection<LayerVm> Layers { get; } = new();
 
         public IRelayCommand OpenDwgCommand { get; }
         public IRelayCommand ToggleMeasureCmd { get; }
         public IRelayCommand ToggleSelectCmd { get; }
         public IRelayCommand ExportCoordsCmd { get; }
         public IRelayCommand SendToDataCmd { get; }
-        public IRelayCommand BuildMapCmd { get; }
 
+        private readonly Dictionary<string, List<(Geometry geo, WpfBrush brush)>> _layerCache = new();
+        private readonly List<(string layer, string text, double x, double y, double height, WpfBrush brush)> _textCache = new();
 
-        public CoordinateExportingViewModel(RawDataViewModel raw)
+        public void OpenDwgFromPath(string filePath)
         {
-            _raw = raw;
-
-            OpenDwgCommand = new RelayCommand(OpenDwg);
-            ExportCoordsCmd = new RelayCommand(ExportCoords);
-            SendToDataCmd = new RelayCommand(SendToData);
-            ToggleMeasureCmd = new RelayCommand(() =>
-            {
-                IsMeasureMode = !IsMeasureMode;
-                if (IsMeasureMode) IsSelectMode = false;
-            });
-            ToggleSelectCmd = new RelayCommand(() =>
-            {
-                IsSelectMode = !IsSelectMode;
-                if (IsSelectMode) IsMeasureMode = false;
-                if (!IsSelectMode) SelectedPoints.Clear();
-            });
-
-            BuildMapCmd = new RelayCommand(BuildMap,
-                () => SelectedPoints.Count >= 3 &&
-                      _raw.CoordRows.Count >= SelectedPoints.Count &&
-                      _raw.DataRows.Count >= SelectedPoints.Count);
-
-            SelectedPoints.CollectionChanged += (_, __) => BuildMapCmd.NotifyCanExecuteChanged();
-        }
-
-
-        private void BuildMap()
-        {
-            var count = SelectedPoints.Count;
-            var triples = Enumerable.Range(0, count)
-                .Select(i => (
-                    X: SelectedPoints[i].X,
-                    Y: SelectedPoints[i].Y,
-                    Mark: _raw.DataRows[i].Mark))
-                .Where(t => t.Mark.HasValue)
-                .Select(t => (t.X, t.Y, Z: t.Mark.Value))
-                .ToList();
-            if (triples.Count < 3)
-            {
-                MessageBox.Show("Недостаточно точек для изолиний (нужно ≥3).", "Карта осадков", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            var isolines = ConrecHelper.Generate(triples, IsoStep, GridStep);
-
-            Contours.Clear();
-            foreach (var line in isolines)
-            {
-                var pc = new PointCollection();
-                foreach (var (x, y) in line)
-                {
-                    var px = (x - MinX) * PixelsPerUnit;
-                    var py = (MaxY - y) * PixelsPerUnit;
-                    pc.Add(new WpfPoint(px, py));
-                }
-                if (pc.Count > 1) Contours.Add(pc);
-            }
-        }
-
-
-        private void SendToData()
-        {
-            var msg = new CoordinatesMessage(this.SelectedPoints);
-            WeakReferenceMessenger.Default.Send(msg);
-        }
-
-        public void FitToViewport(double viewportW, double viewportH)
-        {
-            if (CadBitmap == null || viewportW <= 0 || viewportH <= 0) return;
-            FitScale = Math.Min(
-                viewportW / CadBitmap.PixelWidth,
-                viewportH / CadBitmap.PixelHeight);
-            OnPropertyChanged(nameof(FitScale));
-            OnPropertyChanged(nameof(EffectiveScale));
-            OnPropertyChanged(nameof(ScaleBarPixels));
-        }
-
-        private void OpenDwg()
-        {
-            var dlg = new OpenFileDialog { Filter = "AutoCAD DWG|*.dwg" };
-            if (dlg.ShowDialog() != true) return;
-
             try
             {
-                var doc = DwgReader.Read(dlg.FileName);
-                CadBitmap = RenderCadToBitmap(doc, 3000, out double ppu, out var bounds);
-                PixelsPerUnit = ppu;
-                (MinX, MinY, MaxX, MaxY) = bounds;
+                Doc = DwgReader.Read(filePath);
+                ComputeBounds(Doc, out double minX, out double minY, out double maxX, out double maxY);
+                MinX = minX; MinY = minY; MaxX = maxX; MaxY = maxY;
+
+                int targetPx = 3000;
+                double dwgW = MaxX - MinX, dwgH = MaxY - MinY;
+                PixelsPerUnit = targetPx / Math.Max(dwgW, dwgH);
+
+                RebuildLayersFromDoc();
+                BuildGeometryCache();
+                RebuildScene();
+
                 ZoomFactor = 1.0;
                 OnPropertyChanged(nameof(ScaleBarPixels));
                 SelectedPoints.Clear();
@@ -179,139 +138,265 @@ namespace Osadka.ViewModels
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    $"Ошибка чтения DWG: {ex.Message}",
-                    "Ошибка",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                MessageBox.Show($"Ошибка чтения DWG: {ex.Message}", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private void ExportCoords()
+        private void OpenDwg()
         {
-            if (SelectedPoints.Count == 0)
+            var dlg = new OpenFileDialog
             {
-                MessageBox.Show(
-                    "Нечего экспортировать",
-                    "Экспорт",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
-                return;
+                Filter = "DWG (*.dwg)|*.dwg|DXF (*.dxf)|*.dxf|All files (*.*)|*.*",
+                Title = "Открыть чертёж"
+            };
+            if (dlg.ShowDialog() == true)
+            {
+                OpenDwgFromPath(dlg.FileName);
             }
+        }
 
-            var dlg = new SaveFileDialog { Filter = "CSV (*.csv)|*.csv" };
-            if (dlg.ShowDialog() != true) return;
-
-            using var writer = new StreamWriter(dlg.FileName);
-            writer.WriteLine("X;Y");
-            foreach (var pt in SelectedPoints)
-                writer.WriteLine($"{pt.X:F3};{pt.Y:F3}");
+        private void RebuildLayersFromDoc()
+        {
+            Layers.Clear();
+            if (Doc?.Layers == null) return;
+            foreach (var l in Doc.Layers)
+                Layers.Add(new LayerVm(l.Name, true));
         }
 
 
-        private static BitmapSource RenderCadToBitmap(
-            CadDocument doc,
-            int targetPx,
-            out double pxPerUnit,
-            out (double minX, double minY, double maxX, double maxY) bounds)
+        private static readonly Dictionary<int, WpfColor> _aci = new()
         {
-            GetBounds(doc, out double minX, out double minY, out double maxX, out double maxY);
-            bounds = (minX, minY, maxX, maxY);
+            [1] = WpfColor.FromRgb(255, 0, 0),
+            [2] = WpfColor.FromRgb(255, 255, 0),
+            [3] = WpfColor.FromRgb(0, 255, 0),
+            [4] = WpfColor.FromRgb(0, 255, 255),
+            [5] = WpfColor.FromRgb(0, 0, 255),
+            [6] = WpfColor.FromRgb(255, 0, 255),
+            [7] = WpfColor.FromRgb(255, 255, 255),
+            [8] = WpfColor.FromRgb(128, 128, 128),
+            [9] = WpfColor.FromRgb(255, 128, 0),
+        };
 
-            double dwgW = maxX - minX, dwgH = maxY - minY;
-            double scale = targetPx / Math.Max(dwgW, dwgH);
-            pxPerUnit = scale;
+        private static WpfBrush Frozen(WpfColor c)
+        {
+            var b = new WpfSolidColorBrush(c);
+            b.Freeze();
+            return b;
+        }
 
-            int bmpW = (int)Math.Ceiling(dwgW * scale);
-            int bmpH = (int)Math.Ceiling(dwgH * scale);
+        private static WpfColor HsvToRgb(double h, double s, double v)
+        {
+            double C = v * s;
+            double X = C * (1 - Math.Abs((h / 60.0) % 2 - 1));
+            double m = v - C;
+            double r = 0, g = 0, b = 0;
+            if (h < 60) { r = C; g = X; b = 0; }
+            else if (h < 120) { r = X; g = C; b = 0; }
+            else if (h < 180) { r = 0; g = C; b = X; }
+            else if (h < 240) { r = 0; g = X; b = C; }
+            else if (h < 300) { r = X; g = 0; b = C; }
+            else { r = C; g = 0; b = X; }
+            return WpfColor.FromRgb(
+                (byte)Math.Round((r + m) * 255),
+                (byte)Math.Round((g + m) * 255),
+                (byte)Math.Round((b + m) * 255));
+        }
 
-            var dv = new DrawingVisual();
-            using (var dc = dv.RenderOpen())
+        private static WpfBrush AciToBrush(int index)
+        {
+            if (_aci.TryGetValue(index, out var c)) return Frozen(c);
+            var hue = (index * 137) % 360;
+            return Frozen(HsvToRgb(hue, 0.55, 0.92));
+        }
+
+        private WpfBrush GetBrushFor(Entity ent)
+        {
+            CadColor c = ent.Color;
+
+            if (c.IsTrueColor)
+                return Frozen(WpfColor.FromRgb((byte)c.R, (byte)c.G, (byte)c.B));
+
+            if (c.IsByLayer && ent.Layer is CadLayer layer)
             {
-                foreach (var ent in doc.Entities)
+                CadColor lc = layer.Color;
+                if (lc.IsTrueColor)
+                    return Frozen(WpfColor.FromRgb((byte)lc.R, (byte)lc.G, (byte)lc.B));
+                if (!lc.IsByLayer)
+                    return AciToBrush(lc.Index);
+            }
+            if (!c.IsTrueColor)
+                return AciToBrush(c.Index);
+            string key = ent.Layer?.Name ?? "0";
+            var hue2 = (uint)key.GetHashCode() % 360u;
+            return Frozen(HsvToRgb(hue2, 0.55, 0.92));
+        }
+
+        private static bool IsNearWhite(WpfColor col) =>
+            col.R > 245 && col.G > 245 && col.B > 245;
+
+        private void BuildGeometryCache()
+        {
+            _layerCache.Clear();
+            _textCache.Clear();
+            if (Doc == null) return;
+
+            void AddGeo(string layer, Geometry g, WpfBrush brush)
+            {
+                if (!_layerCache.TryGetValue(layer, out var list))
+                    _layerCache[layer] = list = new List<(Geometry, WpfBrush)>();
+                list.Add((g, brush));
+            }
+
+            void EmitEntity(Entity ent, string layerOverride = null)
+            {
+                string layer = layerOverride ?? (ent.Layer?.Name ?? "0");
+                var brush = GetBrushFor(ent);
+
+                switch (ent)
                 {
-                    DrawEntityOrText(dc, ent, minX, minY, scale, bmpH);
+                    case CadLine ln:
+                        {
+                            var g = new StreamGeometry();
+                            using (var sg = g.Open())
+                            {
+                                sg.BeginFigure(new WpfPoint(ln.StartPoint.X, ln.StartPoint.Y), false, false);
+                                sg.LineTo(new WpfPoint(ln.EndPoint.X, ln.EndPoint.Y), true, true);
+                            }
+                            g.Freeze();
+                            AddGeo(layer, g, brush);
+                            break;
+                        }
+                    case CadCircle c:
+                        {
+                            var g = new EllipseGeometry(new WpfPoint(c.Center.X, c.Center.Y), c.Radius, c.Radius);
+                            g.Freeze();
+                            AddGeo(layer, g, brush);
+                            break;
+                        }
+                    case CadPolyline pl when pl.Vertices.Count > 0:
+                        {
+                            var g = new StreamGeometry();
+                            using (var sg = g.Open())
+                            {
+                                var v0 = pl.Vertices[0].Location;
+                                sg.BeginFigure(new WpfPoint(v0.X, v0.Y), false, pl.IsClosed);
+                                foreach (var v in pl.Vertices.Skip(1))
+                                    sg.LineTo(new WpfPoint(v.Location.X, v.Location.Y), true, true);
+                            }
+                            g.Freeze();
+                            AddGeo(layer, g, brush);
+                            break;
+                        }
+                    case CadText txt:
+                        _textCache.Add((layer, txt.Value, txt.InsertPoint.X, txt.InsertPoint.Y, txt.Height, brush));
+                        break;
+
+                    case CadMText mt:
+                        _textCache.Add((layer, mt.Value, mt.InsertPoint.X, mt.InsertPoint.Y, mt.Height, brush));
+                        break;
+
+                    case CadInsert ins:
+                        if (ins.Block != null)
+                        {
+                            foreach (var sub in ins.Block.Entities)
+                                EmitEntity(sub, ins.Layer?.Name ?? layer);
+                        }
+                        foreach (CadAttrib at in ins.Attributes)
+                            _textCache.Add((layer, at.Value, at.InsertPoint.X, at.InsertPoint.Y, at.Height, brush));
+                        break;
+
+                    default:
+                        break;
                 }
             }
 
-            var bmp = new RenderTargetBitmap(bmpW, bmpH, 96, 96, PixelFormats.Pbgra32);
-            bmp.Render(dv);
-            bmp.Freeze();
-            return bmp;
+            foreach (var ent in Doc.Entities)
+                EmitEntity(ent);
         }
 
-        private static void DrawEntityOrText(
-            DrawingContext dc,
-            Entity ent,
-            double minX, double minY,
-            double scale, int bmpH)
+        private void RebuildScene()
         {
-            var pen = new Pen(Brushes.Black, 1);
+            if (Doc == null) return;
 
-            switch (ent)
+            var visible = new HashSet<string>(Layers.Where(l => l.IsVisible).Select(l => l.Name));
+
+            double strokeWorld = BaseStrokePx / PixelsPerUnit;
+            if (ConstantScreenThickness)
+                strokeWorld /= Math.Max(EffectiveScale, 1e-6);
+
+            var group = new DrawingGroup();
+            var m = new Matrix(PixelsPerUnit, 0, 0, -PixelsPerUnit, -MinX * PixelsPerUnit, MaxY * PixelsPerUnit);
+            group.Transform = new MatrixTransform(m);
+
+            using (var dc = group.Open())
             {
-                case CadLine ln:
-                    dc.DrawLine(pen,
-                        ToPx(ln.StartPoint.X, ln.StartPoint.Y, minX, minY, scale, bmpH),
-                        ToPx(ln.EndPoint.X, ln.EndPoint.Y, minX, minY, scale, bmpH));
-                    break;
+                // geometry
+                foreach (var kv in _layerCache)
+                {
+                    if (!visible.Contains(kv.Key)) continue;
 
-                case CadCircle c:
-                    dc.DrawEllipse(null, pen,
-                        ToPx(c.Center.X, c.Center.Y, minX, minY, scale, bmpH),
-                        c.Radius * scale, c.Radius * scale);
-                    break;
-
-                case CadPolyline pl when pl.Vertices.Count > 0:
-                    var geo = new StreamGeometry();
-                    using (var sg = geo.Open())
+                    foreach (var item in kv.Value)
                     {
-                        var v0 = pl.Vertices[0].Location;
-                        sg.BeginFigure(
-                            ToPx(v0.X, v0.Y, minX, minY, scale, bmpH),
-                            false, pl.IsClosed);
-                        foreach (var v in pl.Vertices.Skip(1))
-                            sg.LineTo(
-                                ToPx(v.Location.X, v.Location.Y, minX, minY, scale, bmpH),
-                                true, true);
+                        var geo = item.geo;
+                        var brush = item.brush;
+
+                        var pen = new Pen(brush, strokeWorld); pen.Freeze();
+
+                        if (WhiteHaloEnabled && brush is WpfSolidColorBrush scb && IsNearWhite(scb.Color))
+                        {
+                            double haloWorld = strokeWorld + ScreenPxToWorld(HaloExtraPx);
+                            var haloPen = new Pen(Brushes.Black, haloWorld); haloPen.Freeze();
+                            dc.DrawGeometry(null, haloPen, geo);
+                        }
+
+                        dc.DrawGeometry(null, pen, geo);
                     }
-                    geo.Freeze();
-                    dc.DrawGeometry(null, pen, geo);
-                    break;
+                }
 
-                case CadText txt:
-                    DrawCadText(dc, txt.Value,
-                        txt.InsertPoint.X, txt.InsertPoint.Y, txt.Height,
-                        minX, minY, scale, bmpH, Brushes.Black);
-                    break;
-
-                case CadMText mt:
-                    DrawCadText(dc, mt.Value,
-                        mt.InsertPoint.X, mt.InsertPoint.Y, mt.Height,
-                        minX, minY, scale, bmpH, Brushes.Black);
-                    break;
-
-                case CadInsert ins:
-                    if (ins.Block != null)
-                        foreach (var sub in ins.Block.Entities)
-                            DrawEntityOrText(dc, sub, minX, minY, scale, bmpH);
-                    foreach (CadAttrib at in ins.Attributes)
-                    {
-                        DrawCadText(dc, at.Value,
-                            at.InsertPoint.X, at.InsertPoint.Y, at.Height,
-                            minX, minY, scale, bmpH, Brushes.Black);
-                    }
-                    break;
+                // texts
+                foreach (var t in _textCache)
+                {
+                    if (!visible.Contains(t.layer)) continue;
+                    DrawCadText(dc, t.text, t.x, t.y, t.height, t.brush);
+                }
             }
+
+            group.Freeze();
+            CadDrawing = new DrawingImage(group);
+            CadDrawing.Freeze();
+
+            OnPropertyChanged(nameof(ImageWidthPx));
+            OnPropertyChanged(nameof(ImageHeightPx));
         }
 
-        private static void GetBounds(
-            CadDocument doc,
-            out double minX, out double minY,
-            out double maxX, out double maxY)
+        private static void DrawCadText(DrawingContext dc, string txt, double x, double y, double height, WpfBrush brush)
+        {
+            double fontUnits = Math.Max(height, 0.5);
+            var ft = new FormattedText(
+                txt ?? string.Empty,
+                System.Globalization.CultureInfo.CurrentUICulture,
+                FlowDirection.LeftToRight,
+                new Typeface("Segoe UI"),
+                fontUnits,
+                brush,
+                1.0);
+
+            dc.PushTransform(new TranslateTransform(x, y));
+            dc.PushTransform(new ScaleTransform(1, -1));
+
+            var origin = new WpfPoint(0, -ft.Baseline);
+            dc.DrawText(ft, origin);
+
+            dc.Pop();
+            dc.Pop();
+        }
+
+        private static void ComputeBounds(CadDocument doc, out double minX, out double minY, out double maxX, out double maxY)
         {
             double mnX = double.PositiveInfinity, mnY = double.PositiveInfinity;
             double mxX = double.NegativeInfinity, mxY = double.NegativeInfinity;
+
             void upd(double x, double y)
             {
                 if (x < mnX) mnX = x;
@@ -328,170 +413,116 @@ namespace Osadka.ViewModels
                         upd(ln.StartPoint.X, ln.StartPoint.Y);
                         upd(ln.EndPoint.X, ln.EndPoint.Y);
                         break;
+
                     case CadCircle c:
                         upd(c.Center.X - c.Radius, c.Center.Y - c.Radius);
                         upd(c.Center.X + c.Radius, c.Center.Y + c.Radius);
                         break;
-                    case CadPolyline pl:
-                        foreach (var v in pl.Vertices)
-                            upd(v.Location.X, v.Location.Y);
+
+                    case CadPolyline pl when pl.Vertices.Count > 0:
+                        foreach (var v in pl.Vertices) upd(v.Location.X, v.Location.Y);
                         break;
+
+                    case CadText t:
+                        upd(t.InsertPoint.X, t.InsertPoint.Y);
+                        break;
+
+                    case CadMText mt:
+                        upd(mt.InsertPoint.X, mt.InsertPoint.Y);
+                        break;
+
                     case CadInsert ins:
-                        upd(ins.InsertPoint.X, ins.InsertPoint.Y);
                         if (ins.Block != null)
+                        {
                             foreach (var sub in ins.Block.Entities)
-                                if (sub is CadLine l2)
+                            {
+                                switch (sub)
                                 {
-                                    upd(l2.StartPoint.X, l2.StartPoint.Y);
-                                    upd(l2.EndPoint.X, l2.EndPoint.Y);
+                                    case CadLine l2:
+                                        upd(l2.StartPoint.X, l2.StartPoint.Y);
+                                        upd(l2.EndPoint.X, l2.EndPoint.Y);
+                                        break;
+                                    case CadCircle c2:
+                                        upd(c2.Center.X - c2.Radius, c2.Center.Y - c2.Radius);
+                                        upd(c2.Center.X + c2.Radius, c2.Center.Y + c2.Radius);
+                                        break;
+                                    case CadPolyline pl2 when pl2.Vertices.Count > 0:
+                                        foreach (var v in pl2.Vertices) upd(v.Location.X, v.Location.Y);
+                                        break;
                                 }
-                                else if (sub is CadCircle c2)
-                                {
-                                    upd(c2.Center.X - c2.Radius, c2.Center.Y - c2.Radius);
-                                    upd(c2.Center.X + c2.Radius, c2.Center.Y + c2.Radius);
-                                }
-                                else if (sub is CadPolyline pl2)
-                                {
-                                    foreach (var v2 in pl2.Vertices)
-                                        upd(v2.Location.X, v2.Location.Y);
-                                }
+                            }
+                        }
+                        foreach (CadAttrib at in ins.Attributes)
+                            upd(at.InsertPoint.X, at.InsertPoint.Y);
                         break;
                 }
             }
 
-            minX = mnX; minY = mnY;
-            maxX = mxX; maxY = mxY;
-        }
-        private static WpfPoint ToPx(
-            double x, double y,
-            double minX, double minY,
-            double scale, int bmpH) =>
-            new WpfPoint((x - minX) * scale,
-                         bmpH - (y - minY) * scale);
-
-        private static void DrawCadText(
-            DrawingContext dc,
-            string txt,
-            double x, double y,
-            double height,
-            double minX, double minY,
-            double scale, int bmpH,
-            Brush brush)
-        {
-            double fontPx = Math.Max(height, 0.5) * scale;
-            var ft = new FormattedText(
-                txt,
-                System.Globalization.CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
-                new Typeface("Arial"),
-                fontPx,
-                brush,
-                1.0);
-
-            var p = new WpfPoint(
-                (x - minX) * scale,
-                bmpH - (y - minY) * scale - ft.Height);
-
-            dc.DrawText(ft, p);
-        }
-    }
-
-    internal static class ConrecHelper
-    {
-        public static IEnumerable<IEnumerable<(double X, double Y)>> Generate(
-            IReadOnlyList<(double X, double Y, double Z)> pts,
-            double isoStep,
-            double cellSize)
-        {
-            if (pts.Count < 3) yield break;
-
-            double minX = pts.Min(p => p.X), maxX = pts.Max(p => p.X);
-            double minY = pts.Min(p => p.Y), maxY = pts.Max(p => p.Y);
-
-            int nx = Math.Max(2, (int)Math.Ceiling((maxX - minX) / cellSize));
-            int ny = Math.Max(2, (int)Math.Ceiling((maxY - minY) / cellSize));
-
-            var grid = new double[nx + 1, ny + 1];
-            for (int i = 0; i <= nx; i++)
+            if (!double.IsFinite(mnX) || !double.IsFinite(mnY) ||
+                !double.IsFinite(mxX) || !double.IsFinite(mxY))
             {
-                for (int j = 0; j <= ny; j++)
-                {
-                    double x = minX + i * cellSize;
-                    double y = minY + j * cellSize;
-                    grid[i, j] = Idw(x, y, pts);
-                }
+                mnX = mnY = 0; mxX = mxY = 1;
             }
 
-            double zMin = grid.Cast<double>().Min();
-            double zMax = grid.Cast<double>().Max();
-            for (double level = Math.Ceiling(zMin / isoStep) * isoStep; level <= zMax; level += isoStep)
-            {
-                foreach (var poly in March(level, grid, minX, minY, cellSize))
-                    yield return poly;
-            }
+            minX = mnX; minY = mnY; maxX = mxX; maxY = mxY;
         }
 
-        private static double Idw(double x, double y, IReadOnlyList<(double X, double Y, double Z)> pts, double power = 2)
+        double ScreenPxToWorld(double px)
         {
-            const double eps = 1e-12;
-            double num = 0, den = 0;
-            foreach (var (px, py, z) in pts)
-            {
-                double d2 = (px - x) * (px - x) + (py - y) * (py - y) + eps;
-                double w = 1 / Math.Pow(d2, power / 2);
-                num += w * z; den += w;
-            }
-            return num / den;
+            double w = px / PixelsPerUnit;
+            if (ConstantScreenThickness)
+                w /= Math.Max(EffectiveScale, 1e-6);
+            return w;
+        }
+        public void FitToViewport(double viewportW, double viewportH)
+        {
+            if (CadDrawing == null || viewportW <= 0 || viewportH <= 0) return;
+
+            double worldW = (MaxX - MinX);
+            double worldH = (MaxY - MinY);
+
+            if (worldW <= 0 || worldH <= 0) return;
+
+            double scaleX = viewportW / (worldW * PixelsPerUnit);
+            double scaleY = viewportH / (worldH * PixelsPerUnit);
+            FitScale = Math.Min(scaleX, scaleY);
+            OnPropertyChanged(nameof(EffectiveScale));
+            OnPropertyChanged(nameof(ScaleBarPixels));
         }
 
-        private static readonly (int dx, int dy)[] Corner =
+        private void ExportCoords()
         {
-            (0,0),(1,0),(1,1),(0,1)
-        };
-
-        private static IEnumerable<IEnumerable<(double X, double Y)>> March(
-            double level,
-            double[,] g,
-            double x0,
-            double y0,
-            double cell)
-        {
-            int nx = g.GetLength(0) - 1;
-            int ny = g.GetLength(1) - 1;
-
-            for (int i = 0; i < nx; i++)
+            if (SelectedPoints.Count == 0)
             {
-                for (int j = 0; j < ny; j++)
-                {
-                    int mask = 0;
-                    if (g[i, j] > level) mask |= 1;
-                    if (g[i + 1, j] > level) mask |= 2;
-                    if (g[i + 1, j + 1] > level) mask |= 4;
-                    if (g[i, j + 1] > level) mask |= 8;
-                    if (mask == 0 || mask == 15) continue;
-
-                    var poly = new List<(double, double)>();
-                    for (int k = 0; k < 4; k++)
-                    {
-                        int k1 = k, k2 = (k + 1) % 4;
-                        bool a = (mask & (1 << k1)) != 0;
-                        bool b = (mask & (1 << k2)) != 0;
-                        if (a == b) continue;
-
-                        var (dx1, dy1) = Corner[k1];
-                        var (dx2, dy2) = Corner[k2];
-
-                        double z1 = g[i + dx1, j + dy1];
-                        double z2 = g[i + dx2, j + dy2];
-                        double t = (level - z1) / (z2 - z1 + double.Epsilon);
-
-                        double x = x0 + (i + dx1 + t * (dx2 - dx1)) * cell;
-                        double y = y0 + (j + dy1 + t * (dy2 - dy1)) * cell;
-                        poly.Add((x, y));
-                    }
-                    if (poly.Count > 1) yield return poly;
-                }
+                MessageBox.Show("Нечего экспортировать", "Экспорт",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
             }
+
+            var dlg = new SaveFileDialog { Filter = "CSV (*.csv)|*.csv" };
+            if (dlg.ShowDialog() != true) return;
+
+            using var writer = new StreamWriter(dlg.FileName);
+            writer.WriteLine("X;Y");
+            foreach (var pt in SelectedPoints)
+                writer.WriteLine($"{pt.X:F2};{pt.Y:F2}");
+        }
+
+        private void SendToData()
+        {
+            var scaled = SelectedPoints
+                .Select(p => new WpfPoint(
+                    Math.Round(p.X * _raw.CoordScale, 2),
+                    Math.Round(p.Y * _raw.CoordScale, 2)))
+                .ToList();
+
+            WeakReferenceMessenger.Default.Send(new CoordinatesMessage(scaled));
+        }
+
+
+        public (double X, double Y)? SnapToNearest(double x, double y, double tolWorld, bool snapOnEdge)
+        {
+            return null;
         }
     }
 }

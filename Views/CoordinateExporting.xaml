@@ -1,95 +1,101 @@
 ﻿<UserControl x:Class="Osadka.Views.CoordinateExporting"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:conv="clr-namespace:Osadka.Converters"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:Osadka.ViewModels"
              mc:Ignorable="d"
-             Focusable="True" KeyDown="UserControl_KeyDown">
-    <UserControl.Resources>
-        <conv:EnumToBooleanConverter x:Key="EnumToBool"/>
-    </UserControl.Resources>
+             KeyDown="UserControl_KeyDown">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition/>
-            <RowDefinition Height="30"/>
+            <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <ToolBar Grid.Row="0">
-            <Button x:Name="BtnOpen"
-              Content="📂 Открыть DWG"
-              Click="BtnOpen_Click"/>
-            <Separator/>
-            <Button x:Name="BtnRuler"
-              Content="📏 Линейка"
-              Margin="4,0,0,0"
-              Click="BtnRuler_Click"/>
-            <Separator/>
-            <Button x:Name="BtnSelect"
-              Content="✖ Выбор точек"
-              Margin="2,0,0,0"
-              Click="BtnSelect_Click"/>
-            <Separator/>
-            <Slider Width="120"
-              Minimum="0.1"
-              Maximum="10"
-              Value="{Binding ZoomFactor, Mode=TwoWay}"/>
-            <Separator/>
-            <Button Content="→ В исходные данные"
-        Command="{Binding SendToDataCmd}"/>
-            <Separator/>
-            <Button x:Name="BtnExport"
-              Content="💾 Экспорт CSV"
-              Margin="4,0,0,0"
-              Click="BtnExport_Click"/>
-            <Separator/>
+        <ToolBarTray Grid.Row="0" Margin="6,6,6,0">
+            <ToolBar>
+                <Button x:Name="BtnOpen" Click="BtnOpen_Click" ToolTip="Открыть DWG">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="Segoe MDL2 Assets" Text="" Margin="0,0,6,0"/>
+                        <TextBlock Text="Открыть DWG"/>
+                    </StackPanel>
+                </Button>
+                <Separator/>
+                <ToggleButton x:Name="BtnSelect"
+                       IsChecked="{Binding IsSelectMode, Mode=OneWay}"
+                       Click="BtnSelect_Click"
+                       ToolTip="Режим выбора точек">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="Segoe MDL2 Assets" Text="" Margin="0,0,6,0"/>
+                        <TextBlock Text="Выбор точек"/>
+                    </StackPanel>
+                </ToggleButton>
+                <ToggleButton x:Name="BtnRuler"
+                       IsChecked="{Binding IsMeasureMode, Mode=OneWay}"
+                       Click="BtnRuler_Click"
+                       ToolTip="Линейка">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="Segoe MDL2 Assets" Text="" Margin="0,0,6,0"/>
+                        <TextBlock Text="Линейка"/>
+                    </StackPanel>
+                </ToggleButton>
+                <Separator/>
+                <Button x:Name="BtnExport" Click="BtnExport_Click" ToolTip="Экспорт точек в CSV">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="Segoe MDL2 Assets" Text="" Margin="0,0,6,0"/>
+                        <TextBlock Text="Экспорт CSV"/>
+                    </StackPanel>
+                </Button>
+                <Button x:Name="BtnSend" Click="BtnSend_Click" ToolTip="Отправить координаты в исходные данные">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="Segoe MDL2 Assets" Text="" Margin="0,0,6,0"/>
+                        <TextBlock Text="В исходные данные"/>
+                    </StackPanel>
+                </Button>
+                <Separator/>
+                <Button x:Name="BtnLayers" Click="BtnLayers_Click" ToolTip="Выбор слоёв">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="Segoe MDL2 Assets" Text="" Margin="0,0,6,0"/>
+                        <TextBlock Text="Слои ▾"/>
+                    </StackPanel>
+                </Button>
+            </ToolBar>
+        </ToolBarTray>
 
-        </ToolBar>
-
-        <ScrollViewer x:Name="Viewport"
-                      Grid.Row="1"
-                      HorizontalScrollBarVisibility="Auto"
-                      VerticalScrollBarVisibility="Auto"
-                      Background="White"
-                      PreviewMouseWheel="ImageWheel"
-                      PreviewMouseRightButtonDown="Viewport_RightDown"
-                      PreviewMouseRightButtonUp="Viewport_RightUp"
-                      PreviewMouseMove="Viewport_Move"
-                      PreviewMouseLeftButtonDown="Viewport_LeftDown">
-
-            <Grid x:Name="ImageHost"
-          RenderTransformOrigin="0,0">
-                <Grid.RenderTransform>
-                    <ScaleTransform ScaleX="{Binding EffectiveScale}"
+        <Grid Grid.Row="1" Background="White">
+            <ScrollViewer x:Name="Viewport"
+                    HorizontalScrollBarVisibility="Auto"
+                    VerticalScrollBarVisibility="Auto"
+                    PreviewMouseWheel="ImageWheel"
+                    PreviewMouseRightButtonDown="Viewport_RightDown"
+                    PreviewMouseMove="Viewport_Move"
+                    PreviewMouseRightButtonUp="Viewport_RightUp"
+                    PreviewMouseLeftButtonDown="Viewport_LeftDown">
+                <Grid RenderTransformOrigin="0,0">
+                    <Grid.RenderTransform>
+                        <ScaleTransform ScaleX="{Binding EffectiveScale}"
                             ScaleY="{Binding EffectiveScale}"/>
-                </Grid.RenderTransform>
-                <Image Source="{Binding CadBitmap}"
-               Stretch="None"/>
+                    </Grid.RenderTransform>
 
-                <Canvas x:Name="OverlayCanvas"
-                IsHitTestVisible="False"/>
-            </Grid>
-        </ScrollViewer>
+                    <Image x:Name="ImageHost" Source="{Binding CadDrawing}" Stretch="None"
+                 SnapsToDevicePixels="True" UseLayoutRounding="True"/>
 
-        <Canvas Grid.Row="2">
-            <Rectangle Fill="Black" Height="2"
-               Width="{Binding ScaleBarPixels}"/>
+                    <ItemsControl ItemsSource="{Binding Contours}" IsHitTestVisible="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <Canvas/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Polyline Points="{Binding}" Stroke="#1E90FF" StrokeThickness="1"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
 
-            <Border
-        Canvas.Left="{Binding ScaleBarPixels}"
-        Canvas.Top="0"
-        Background="White"
-        BorderBrush="Black"
-        BorderThickness="1"
-        CornerRadius="2"
-        Padding="4,1">
-                <TextBlock
-            Text="{Binding ScaleBarLabel}"
-            FontSize="14"
-            FontWeight="Bold"
-            Foreground="Black"/>
-            </Border>
-        </Canvas>
+                    <Canvas x:Name="OverlayCanvas" IsHitTestVisible="False"/>
+                </Grid>
+            </ScrollViewer>
+        </Grid>
     </Grid>
 </UserControl>

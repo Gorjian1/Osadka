@@ -79,7 +79,7 @@ namespace Osadka.Services
                 .Select(r => r.Id)
                 .ToList();
 
-            bool Exceeded(double x, double lim) => Math.Abs(x) > lim;
+            bool Exceeded(double x, double lim) => x < -Math.Abs(lim);
 
             var exceedSp = total
                 .Where(r => Exceeded(r.Total!.Value, limitSp))

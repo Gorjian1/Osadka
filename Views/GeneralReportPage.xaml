@@ -6,85 +6,198 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:conv="clr-namespace:Osadka.Converters"
     mc:Ignorable="d"
-    d:DesignHeight="450" d:DesignWidth="800">
+    d:DesignHeight="720" d:DesignWidth="1100">
 
-    <Grid>
+    <!-- Minimal, stylish visuals without external packages -->
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="CanvasBrush" Color="#F6F7F9"/>
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFFFF"/>
+        <SolidColorBrush x:Key="SubtleText" Color="#6B7280"/>
+        <SolidColorBrush x:Key="Accent" Color="#2E7D32"/>
+
+        <!-- Card container -->
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="16"/>
+            <Setter Property="Margin" Value="0,12,0,0"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#22000000" BlurRadius="10" ShadowDepth="1" Opacity="0.35"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="H1" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#1F2937"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource SubtleText}"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+        <Style x:Key="MetricLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource SubtleText}"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style x:Key="MetricValue" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#111827"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="{StaticResource CanvasBrush}">
+        <!-- Keep your existing toolbar -->
         <ToolBar VerticalAlignment="Top" Background="#F9FBFD">
             <Button Content="🔢 Рассчитать"
                     Command="{Binding CalculateCommand}"
                     ToolTip="Пересчитать отчёт"/>
             <Separator/>
-            <Button Content="📤 Экспорт (общий)"
-                    Command="{Binding ExportCommand}"
-                    ToolTip="Сохранить общий отчёт в Excel"/>
-            <Separator/>
-            <Button Content="Открыть шаблон"
-                    Command="{Binding OpenTemplate}"
-                    ToolTip="Сохранить общий отчёт в Excel"/>
         </ToolBar>
 
-        <ScrollViewer Margin="0,40,0,0">
-            <StackPanel Margin="16">
+        <ScrollViewer Margin="0,32,0,0" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="18,0,18,24">
 
-                <TextBlock Text="Общая осадка , мм"
-                           FontWeight="Bold" Margin="0,0,0,4"/>
-                <UniformGrid Columns="3" Margin="0,0,0,12">
-                    <TextBlock Text="Максимальная:"/>
-                    <TextBlock Text="{Binding Report.MaxTotal.Value, StringFormat={}{0:F1}}"/>
-                    <TextBlock Text="{Binding Report.MaxTotal.Ids, Converter={StaticResource Join}}"/>
+                <!-- Общая осадка -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="Общая осадка, мм" Style="{StaticResource SectionTitle}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
 
-                    <TextBlock Text="Минимальная:"/>
-                    <TextBlock Text="{Binding Report.MinTotal.Value, StringFormat={}{0:F1}}"/>
-                    <TextBlock Text="{Binding Report.MinTotal.Ids, Converter={StaticResource Join}}"/>
+                            <!-- Max -->
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Максимальная" Style="{StaticResource MetricLabel}"/>
+                                <TextBlock Style="{StaticResource MetricValue}">
+                                    <Run Text="{Binding Report.MaxTotal.Value, StringFormat={}{0:F1}}"/>
+                                    <Run Text=" мм"/>
+                                </TextBlock>
+                                <TextBlock Foreground="{StaticResource SubtleText}"
+                                           ><Run Text="Точки: "/><Run Text="{Binding Report.MaxTotal.Ids, Converter={StaticResource Join}}"/></TextBlock>
+                            </StackPanel>
 
-                    <TextBlock Text="Среднее значение:"/>
-                    <TextBlock Text="{Binding Report.AvgTotal, StringFormat={}{0:F1}}"
-                               Grid.ColumnSpan="2"/>
-                </UniformGrid>
+                            <!-- Min -->
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Минимальная" Style="{StaticResource MetricLabel}"/>
+                                <TextBlock Style="{StaticResource MetricValue}">
+                                    <Run Text="{Binding Report.MinTotal.Value, StringFormat={}{0:F1}}"/>
+                                    <Run Text=" мм"/>
+                                </TextBlock>
+                                <TextBlock Foreground="{StaticResource SubtleText}"
+                                           ><Run Text="Точки: "/><Run Text="{Binding Report.MinTotal.Ids, Converter={StaticResource Join}}"/></TextBlock>
+                            </StackPanel>
 
-                <TextBlock Text="Осадка за цикл , мм"
-                           FontWeight="Bold" Margin="0,0,0,4"/>
-                <UniformGrid Columns="3" Margin="0,0,0,12">
-                    <TextBlock Text="Максимальная:"/>
-                    <TextBlock Text="{Binding Report.MaxSettl.Value, StringFormat={}{0:F1}}"/>
-                    <TextBlock Text="{Binding Report.MaxSettl.Ids, Converter={StaticResource Join}}"/>
+                            <!-- Avg -->
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Среднее значение" Style="{StaticResource MetricLabel}"/>
+                                <TextBlock Style="{StaticResource MetricValue}">
+                                    <Run Text="{Binding Report.AvgTotal, StringFormat={}{0:F1}}"/>
+                                    <Run Text=" мм"/>
+                                </TextBlock>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
 
-                    <TextBlock Text="Минимальная:"/>
-                    <TextBlock Text="{Binding Report.MinSettl.Value, StringFormat={}{0:F1}}"/>
-                    <TextBlock Text="{Binding Report.MinSettl.Ids, Converter={StaticResource Join}}"/>
+                <!-- Осадка за цикл -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="Осадка за цикл, мм" Style="{StaticResource SectionTitle}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
 
-                    <TextBlock Text="Среднее значение:"/>
-                    <TextBlock Text="{Binding Report.AvgSettl, StringFormat={}{0:F1}}"
-                               Grid.ColumnSpan="2"/>
-                </UniformGrid>
+                            <!-- Max -->
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Максимальная" Style="{StaticResource MetricLabel}"/>
+                                <TextBlock Style="{StaticResource MetricValue}">
+                                    <Run Text="{Binding Report.MaxSettl.Value, StringFormat={}{0:F1}}"/>
+                                    <Run Text=" мм"/>
+                                </TextBlock>
+                                <TextBlock Foreground="{StaticResource SubtleText}"
+                                           ><Run Text="Точки: "/><Run Text="{Binding Report.MaxSettl.Ids, Converter={StaticResource Join}}"/></TextBlock>
+                            </StackPanel>
 
-                <TextBlock Text="Значения отметок" FontWeight="Bold" Margin="0,8,0,2"/>
-                <StackPanel Margin="0,0,0,12">
-                    <TextBlock Text="Нет доступа:"/>
-                    <TextBlock Text="{Binding Report.NoAccessIds, Converter={StaticResource Join}}"/>
+                            <!-- Min -->
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Минимальная" Style="{StaticResource MetricLabel}"/>
+                                <TextBlock Style="{StaticResource MetricValue}">
+                                    <Run Text="{Binding Report.MinSettl.Value, StringFormat={}{0:F1}}"/>
+                                    <Run Text=" мм"/>
+                                </TextBlock>
+                                <TextBlock Foreground="{StaticResource SubtleText}"
+                                           ><Run Text="Точки: "/><Run Text="{Binding Report.MinSettl.Ids, Converter={StaticResource Join}}"/></TextBlock>
+                            </StackPanel>
 
-                    <TextBlock Text="Уничтожены:" Margin="0,4,0,0"/>
-                    <TextBlock Text="{Binding Report.DestroyedIds, Converter={StaticResource Join}}"/>
+                            <!-- Avg -->
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Среднее значение" Style="{StaticResource MetricLabel}"/>
+                                <TextBlock Style="{StaticResource MetricValue}">
+                                    <Run Text="{Binding Report.AvgSettl, StringFormat={}{0:F1}}"/>
+                                    <Run Text=" мм"/>
+                                </TextBlock>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
 
-                    <TextBlock Text="Новые:" Margin="0,4,0,0"/>
-                    <TextBlock Text="{Binding Report.NewIds, Converter={StaticResource Join}}"/>
-                </StackPanel>
+                <!-- Значения отметок -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="Значения отметок" Style="{StaticResource SectionTitle}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
 
-                <TextBlock Text="Точки с превышением" FontWeight="Bold" Margin="0,8,0,2"/>
-                <StackPanel Margin="0,0,0,12">
-                    <TextBlock Text="Превышения максимальной осадки по СП:" FontWeight="Bold" Margin="0,8,0,0"/>
-                    <TextBlock Text="{Binding ExceedTotalSpDisplay}" TextWrapping="Wrap"/>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Нет доступа" Style="{StaticResource MetricLabel}"/>
+                                <TextBlock Text="{Binding Report.NoAccessIds, Converter={StaticResource Join}}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Уничтожены" Style="{StaticResource MetricLabel}"/>
+                                <TextBlock Text="{Binding Report.DestroyedIds, Converter={StaticResource Join}}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Новые" Style="{StaticResource MetricLabel}"/>
+                                <TextBlock Text="{Binding Report.NewIds, Converter={StaticResource Join}}"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
 
-                    <TextBlock Text="Превышения максимальной осадки по расчётам:" FontWeight="Bold" Margin="0,8,0,0"/>
-                    <TextBlock Text="{Binding ExceedTotalCalcDisplay}" TextWrapping="Wrap"/>
-                </StackPanel>
+                <!-- Точки с превышением -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="Точки с превышением" Style="{StaticResource SectionTitle}"/>
 
-                <TextBlock Text="Превышения относительной осадки по СП:" FontWeight="Bold"/>
-                <TextBlock Text="{Binding ExceedRelSpDisplay}" TextWrapping="Wrap"/>
+                        <TextBlock Text="Превышения максимальной осадки по СП" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding ExceedTotalSpDisplay}" TextWrapping="Wrap" Margin="0,2,0,8"/>
 
-                <TextBlock Text="Превышения относительной осадки по расчётам:" FontWeight="Bold" Margin="0,8,0,0"/>
-                <TextBlock Text="{Binding ExceedRelCalcDisplay}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                        <TextBlock Text="Превышения максимальной осадки по расчётам" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding ExceedTotalCalcDisplay}" TextWrapping="Wrap" Margin="0,2,0,8"/>
 
+                        <TextBlock Text="Превышения относительной осадки по СП" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding ExceedRelSpDisplay}" TextWrapping="Wrap" Margin="0,2,0,8"/>
+
+                        <TextBlock Text="Превышения относительной осадки по расчётам" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding ExceedRelCalcDisplay}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </Border>
 
             </StackPanel>
         </ScrollViewer>

@@ -17,7 +17,6 @@ namespace Osadka
         {
             InitializeComponent();
             DataContext = this;
-            InitializeComponent();
             _vm = new MainViewModel();
             DataContext = _vm;
 
@@ -46,7 +45,7 @@ namespace Osadka
         }
 
         private async void OnTestReportClick(object sender, RoutedEventArgs e)
-        {
+        {           
             try
             {
                 await TelegramReporter.SendAsync("Тестовое сообщение: отчёт из Osadka ✔️");

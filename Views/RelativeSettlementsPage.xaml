@@ -10,17 +10,16 @@
     <DockPanel>
         <ToolBar DockPanel.Dock="Top" Background="#F9FBFD">>
             <Button Content="🔢 Пересчитать" Command="{Binding RecalcCommand}"/>
-            <Button Content="📤 Экспорт (relative)" Command="{Binding ExportCommand}"/>
         </ToolBar>
 
         <DataGrid ItemsSource="{Binding AllRows}"
               AutoGenerateColumns="False"
               CanUserAddRows="False"
-              Margin="10,4,11,0" >
+              Margin="40,4,110,0" Height="1000" Width="290" >
             <DataGrid.Columns>
                 <DataGridTextColumn Header="№1"    Binding="{Binding Id1}"/>
                 <DataGridTextColumn Header="№2"    Binding="{Binding Id2}"/>
-                <DataGridTextColumn Header="Dist, м" Binding="{Binding Distance, StringFormat={}{0:F2}}"/>
+                <DataGridTextColumn Header="Dist, мм" Binding="{Binding Distance, StringFormat={}{0:F2}}"/>
                 <DataGridTextColumn Header="ΔS, мм"  Binding="{Binding DeltaTotal, StringFormat={}{0:F1}}"/>
                 <DataGridTextColumn Header="ΔS/Dist" Binding="{Binding Ratio,      StringFormat={}{0:F4}}"/>
             </DataGrid.Columns>

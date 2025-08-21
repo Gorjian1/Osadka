@@ -1,23 +1,16 @@
 ﻿using ClosedXML.Excel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using DocumentFormat.OpenXml.Drawing.Charts;
 using Microsoft.Win32;
 using Osadka.Models;
 using Osadka.Services;
 using Osadka.Views;
-using OxyPlot;
-using OxyPlot.Wpf;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net.NetworkInformation;
-using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
-
 
 namespace Osadka.ViewModels
 {
@@ -40,7 +33,29 @@ namespace Osadka.ViewModels
         private CoordinateExporting? _coord;
 
         private object? _currentPage;
+        private bool _includeGeneral = true;
+        public bool IncludeGeneral
+        {
+            get => _includeGeneral;
+            set => SetProperty(ref _includeGeneral, value);
+        }
+
+        private bool _includeRelative = true;
+        public bool IncludeRelative
+        {
+            get => _includeRelative;
+            set => SetProperty(ref _includeRelative, value);
+        }
+
+        private bool _includeGraphs = true;
+        public bool IncludeGraphs
+        {
+            get => _includeGraphs;
+            set => SetProperty(ref _includeGraphs, value);
+        }
+
         public object? CurrentPage
+
         {
             get => _currentPage;
             set => SetProperty(ref _currentPage, value);
@@ -105,28 +120,20 @@ namespace Osadka.ViewModels
 
         #endregion
 
-
         private void NewProject()
         {
             RawVM.ClearCommand.Execute(null);
             _currentPath = null;
         }
-
-        private void OpenProject()
+        public void LoadProject(string path)
         {
-            var dlg = new OpenFileDialog
-            {
-                Filter = "Osadka Project (*.data)|*.data|All Files|*.*"
-            };
-            if (dlg.ShowDialog() != true) return;
             if (RawVM is not { } vm) return;
 
             try
             {
-                var json = File.ReadAllText(dlg.FileName);
+                var json = File.ReadAllText(path);
                 var data = JsonSerializer.Deserialize<ProjectData>(json)
                            ?? throw new InvalidOperationException("Невалидный формат");
-
 
                 vm.Header.CycleNumber = data.Cycle;
                 vm.Header.MaxNomen = data.MaxNomen;
@@ -139,7 +146,6 @@ namespace Osadka.ViewModels
                 vm.CoordRows.Clear();
                 foreach (var c in data.CoordRows) vm.CoordRows.Add(c);
 
-
                 vm.Objects.Clear();
                 foreach (var objKv in data.Objects)
                 {
@@ -147,6 +153,7 @@ namespace Osadka.ViewModels
                         cycleKv => cycleKv.Key,
                         cycleKv => cycleKv.Value);
                 }
+
                 vm.ObjectNumbers.Clear();
                 foreach (var obj in vm.Objects.Keys.OrderBy(k => k))
                     vm.ObjectNumbers.Add(obj);
@@ -156,18 +163,27 @@ namespace Osadka.ViewModels
                     foreach (var cyc in cycles.Keys.OrderBy(k => k))
                         vm.CycleNumbers.Add(cyc);
 
-                _currentPath = dlg.FileName;
+                _currentPath = path;
             }
             catch (Exception ex)
             {
-                System.Windows.MessageBox.Show(
+                MessageBox.Show(
                     $"Ошибка при загрузке проекта:\n{ex.Message}",
                     "Ошибка",
-                    System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Error);
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
+        private void OpenProject()
+        {
+            var dlg = new OpenFileDialog
+            {
+                Filter = "Osadka Project (*.osd)|*.osd|All Files|*.*"
+            };
+            if (dlg.ShowDialog() != true) return;
 
+            LoadProject(dlg.FileName);
+        }
         private void SaveProject()
         {
             if (_currentPath == null)
@@ -182,7 +198,7 @@ namespace Osadka.ViewModels
         {
             var dlg = new SaveFileDialog
             {
-                Filter = "Osadka Project (*.data)|*.data"
+                Filter = "Osadka Project (*.osd)|*.osd"
             };
             if (dlg.ShowDialog() != true) return;
             SaveTo(dlg.FileName);
@@ -218,10 +234,16 @@ namespace Osadka.ViewModels
             File.WriteAllText(path, json);
         }
 
-
         private void DoQuickExport()
         {
             if (GenVM.Report is null) return;
+
+            if (!(IncludeGeneral || IncludeRelative || IncludeGraphs))
+            {
+                MessageBox.Show("Выберите хотя бы один пункт: Общий, Относительный, Графики.",
+                                "Экспорт", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
 
             string exeDir = AppContext.BaseDirectory;
             string template = Path.Combine(exeDir, "template.xlsx");
@@ -235,63 +257,291 @@ namespace Osadka.ViewModels
             var dlg = new SaveFileDialog
             {
                 Filter = "Excel|*.xlsx",
-                FileName = $"БОтчёт_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
+                FileName = $"Отчёт_{DateTime.Now:yyyyMMdd_HHmm}.xlsx"
             };
             if (dlg.ShowDialog() != true) return;
 
-            File.Copy(template, dlg.FileName, overwrite: true);
-
-            using var wb = new XLWorkbook(dlg.FileName);
-
-            var map = BuildPlaceholderMap(); 
-            foreach (var cell in wb.Worksheets.First()
-                           .CellsUsed(c => c.DataType == XLDataType.Text))
+            try
             {
-                string t = cell.GetString().Trim();
-                if (t.StartsWith("/") && map.TryGetValue(t, out var val))
-                    cell.Value = val;
+                File.Copy(template, dlg.FileName, overwrite: true);
+
+                using (var wb = new XLWorkbook(dlg.FileName))
+                {
+                    var generalWs = wb.Worksheets.First(); 
+
+                    if (IncludeGeneral)
+                    {
+                        var map = BuildPlaceholderMap();
+                        foreach (var cell in generalWs.CellsUsed(c => c.DataType == XLDataType.Text))
+                        {
+                            string t = cell.GetString().Trim();
+                            if (t.StartsWith("/") && map.TryGetValue(t, out var val))
+                                cell.Value = val;
+                        }
+                    }
+                    else
+                    {
+                        generalWs.Delete();
+                    }
+                    if (IncludeRelative)
+                        AddRelativeSheet(wb);
+                    if (IncludeGraphs)
+                    {
+                        AddDynamicsSheet(wb);
+                    }
+                    else
+                    {
+                        var dynWs = wb.Worksheets.FirstOrDefault(
+                            ws => string.Equals(ws.Name, "Графики динамики", StringComparison.OrdinalIgnoreCase));
+                        dynWs?.Delete();
+                    }
+
+                    wb.Save();
+                }
+
+                if (IncludeGraphs)
+                {
+                    RunSta(() => BuildChartFromDynTable_Quick_NoPIA(
+                        filePath: dlg.FileName,
+                        dataSheetName: "Графики динамики",
+                        tableName: "DynTable",
+                        chartSheetName: "Графики динамики",
+                        left: 40, top: 200, width: 920, height: 440,
+                        deleteOldCharts: true
+                    ));
+                }
+
+                MessageBox.Show("Экспорт завершён", "Экспорт",
+                                MessageBoxButton.OK, MessageBoxImage.Information);
             }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка экспорта: {ex.Message}", "Экспорт",
+                                MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
 
-            AddRelativeSheet(wb);
-            AddDynamicsSheet(wb);
 
-            wb.Save();
+        private static void RunSta(System.Action action)
+        {
+            var t = new System.Threading.Thread(() => action()) { IsBackground = true };
+            t.SetApartmentState(System.Threading.ApartmentState.STA);
+            t.Start();
+            t.Join();
+        }
+
+        private static void BuildChartFromDynTable_Quick_NoPIA(
+            string filePath,
+            string dataSheetName = "Графики динамики",
+            string tableName = "DynTable",
+            string chartSheetName = "Графики динамики",
+            int left = 40, int top = 200, int width = 920, int height = 440,
+            bool deleteOldCharts = true)
+        {
+            const int xlRows = 1;
+            const int xlLine = 4;
+
+            object app = null, wb = null, wsData = null, wsChart = null;
+            object workbooks = null, worksheets = null;
+            object listObjects = null, lo = null, loRange = null, dataBodyRange = null;
+            object chartObjects = null, chartObj = null, chart = null;
+
+            try
+            {
+                var excelType = System.Type.GetTypeFromProgID("Excel.Application", throwOnError: false);
+                if (excelType == null)
+                    throw new System.InvalidOperationException("На этом ПК не установлен Microsoft Excel.");
+
+                app = System.Activator.CreateInstance(excelType);
+                excelType.InvokeMember("Visible",
+                    System.Reflection.BindingFlags.SetProperty, null, app, new object[] { false });
+                excelType.InvokeMember("DisplayAlerts",
+                    System.Reflection.BindingFlags.SetProperty, null, app, new object[] { false });
+
+                // Workbooks.Open(filePath)
+                workbooks = excelType.InvokeMember("Workbooks",
+                    System.Reflection.BindingFlags.GetProperty, null, app, null);
+                wb = workbooks.GetType().InvokeMember("Open",
+                    System.Reflection.BindingFlags.InvokeMethod, null, workbooks, new object[] { filePath });
+
+                // Worksheets[dataSheetName]
+                worksheets = wb.GetType().InvokeMember("Worksheets",
+                    System.Reflection.BindingFlags.GetProperty, null, wb, null);
+                try
+                {
+                    wsData = worksheets.GetType().InvokeMember("Item",
+                        System.Reflection.BindingFlags.GetProperty, null, worksheets, new object[] { dataSheetName });
+                }
+                catch
+                {
+                    throw new System.InvalidOperationException($"Не найден лист данных '{dataSheetName}'.");
+                }
+
+                // Таблица ListObjects[tableName]
+                listObjects = wsData.GetType().InvokeMember("ListObjects",
+                    System.Reflection.BindingFlags.GetProperty, null, wsData, null);
+                try
+                {
+                    lo = listObjects.GetType().InvokeMember("Item",
+                        System.Reflection.BindingFlags.GetProperty, null, listObjects, new object[] { tableName });
+                }
+                catch
+                {
+                    throw new System.InvalidOperationException($"Не найдена таблица '{tableName}' на листе '{dataSheetName}'.");
+                }
+
+                dataBodyRange = lo.GetType().InvokeMember("DataBodyRange",
+                    System.Reflection.BindingFlags.GetProperty, null, lo, null);
+                if (dataBodyRange == null)
+                    throw new System.InvalidOperationException("В таблице нет строк данных.");
+                loRange = lo.GetType().InvokeMember("Range",
+                    System.Reflection.BindingFlags.GetProperty, null, lo, null);
+
+                try
+                {
+                    wsChart = worksheets.GetType().InvokeMember("Item",
+                        System.Reflection.BindingFlags.GetProperty, null, worksheets, new object[] { chartSheetName });
+                }
+                catch
+                {
+                    wsChart = worksheets.GetType().InvokeMember("Add",
+                        System.Reflection.BindingFlags.InvokeMethod, null, worksheets, null);
+                    wsChart.GetType().InvokeMember("Name",
+                        System.Reflection.BindingFlags.SetProperty, null, wsChart, new object[] { chartSheetName });
+                }
+                object missing = System.Type.Missing;
+                try
+                {
+                    chartObjects = wsChart.GetType().InvokeMember("ChartObjects",
+                        System.Reflection.BindingFlags.InvokeMethod, null, wsChart, new object[] { missing });
+                }
+                catch
+                {
+                    chartObjects = wsChart.GetType().InvokeMember("ChartObjects",
+                        System.Reflection.BindingFlags.InvokeMethod, null, wsChart, null);
+                }
+
+                if (deleteOldCharts && chartObjects != null)
+                {
+                    try
+                    {
+                        chartObjects.GetType().InvokeMember("Delete",
+                            System.Reflection.BindingFlags.InvokeMethod, null, chartObjects, null);
+                    }
+                    catch
+                    {
+                        try
+                        {
+                            var cntObj = chartObjects.GetType().InvokeMember("Count",
+                                System.Reflection.BindingFlags.GetProperty, null, chartObjects, null);
+                            int cnt = cntObj is int i ? i : System.Convert.ToInt32(cntObj);
+                            for (int j = cnt; j >= 1; j--)
+                            {
+                                var co = chartObjects.GetType().InvokeMember("Item",
+                                    System.Reflection.BindingFlags.GetProperty, null, chartObjects, new object[] { j });
+                                co.GetType().InvokeMember("Delete",
+                                    System.Reflection.BindingFlags.InvokeMethod, null, co, null);
+                                Marshal.FinalReleaseComObject(co);
+                            }
+                        }
+                        catch {  }
+                    }
+
+                    try
+                    {
+                        chartObjects = wsChart.GetType().InvokeMember("ChartObjects",
+                            System.Reflection.BindingFlags.InvokeMethod, null, wsChart, new object[] { missing });
+                    }
+                    catch
+                    {
+                        chartObjects = wsChart.GetType().InvokeMember("ChartObjects",
+                            System.Reflection.BindingFlags.InvokeMethod, null, wsChart, null);
+                    }
+                }
+
+                chartObj = chartObjects.GetType().InvokeMember("Add",
+                    System.Reflection.BindingFlags.InvokeMethod, null, chartObjects,
+                    new object[] { left, top, width, height });
+                chart = chartObj.GetType().InvokeMember("Chart",
+                    System.Reflection.BindingFlags.GetProperty, null, chartObj, null);
+
+                chart.GetType().InvokeMember("SetSourceData",
+                    System.Reflection.BindingFlags.InvokeMethod, null, chart, new object[] { loRange, xlRows });
+                chart.GetType().InvokeMember("ChartType",
+                    System.Reflection.BindingFlags.SetProperty, null, chart, new object[] { xlLine });
+                chart.GetType().InvokeMember("HasTitle",
+                    System.Reflection.BindingFlags.SetProperty, null, chart, new object[] { false });
+
+                wb.GetType().InvokeMember("Save", System.Reflection.BindingFlags.InvokeMethod, null, wb, null);
+            }
+            finally
+            {
+                try { wb?.GetType().InvokeMember("Close", System.Reflection.BindingFlags.InvokeMethod, null, wb, new object[] { false }); } catch { }
+                try { app?.GetType().InvokeMember("Quit", System.Reflection.BindingFlags.InvokeMethod, null, app, null); } catch { }
+
+                void rel(object o) { if (o != null) Marshal.FinalReleaseComObject(o); }
+                rel(chart); rel(chartObj); rel(chartObjects);
+                rel(wsChart); rel(loRange); rel(dataBodyRange); rel(lo); rel(listObjects);
+                rel(wsData); rel(worksheets); rel(wb); rel(workbooks); rel(app);
+
+                System.GC.Collect(); System.GC.WaitForPendingFinalizers();
+                System.GC.Collect(); System.GC.WaitForPendingFinalizers();
+            }
         }
 
         private Dictionary<string, string> BuildPlaceholderMap()
         {
+
+            static string DashIfEmpty(string? s) =>
+                string.IsNullOrWhiteSpace(s) ? "-" : s;
+
+            static string JoinOrDash<T>(IEnumerable<T>? ids)
+            {
+                if (ids == null) return "-";
+                var arr = ids
+                    .Select(x => x?.ToString())
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .ToArray();
+                return arr.Length > 0 ? string.Join(", ", arr) : "-";
+            }
+
+            var r = GenVM.Report!;
+
             var map = new Dictionary<string, string>
             {
-                ["/цикл"] = RawVM.SelectedCycleHeader,
+                ["/цикл"] = DashIfEmpty(RawVM.SelectedCycleHeader),
 
-                ["/предСПмакс"] = RawVM.Header.MaxNomen?.ToString("F2") ?? "-",
-                ["/предРАСЧмакс"] = RawVM.Header.MaxCalculated?.ToString("F2") ?? "-",
-                ["/предСПотн"] = RawVM.Header.RelNomen?.ToString("F2") ?? "-",
-                ["/предРАСЧотн"] = RawVM.Header.RelCalculated?.ToString("F2") ?? "-",
+                ["/предСПмакс"] = DashIfEmpty(RawVM.Header.MaxNomen?.ToString()),
+                ["/предРАСЧмакс"] = DashIfEmpty(RawVM.Header.MaxCalculated?.ToString()),
+                ["/предСПотн"] = DashIfEmpty(RawVM.Header.RelNomen?.ToString()),
+                ["/предРАСЧотн"] = DashIfEmpty(RawVM.Header.RelCalculated?.ToString()),
 
-                ["/общмакс"] = $"{GenVM.Report.MaxTotal.Value:F2}",
-                ["/общмаксId"] = string.Join(", ", GenVM.Report.MaxTotal.Ids),
-                ["/общмин"] = $"{GenVM.Report.MinTotal.Value:F2}",
-                ["/общминId"] = string.Join(", ", GenVM.Report.MinTotal.Ids),
-                ["/общср"] = $"{GenVM.Report.AvgTotal:F2}",
+                ["/общмакс"] = $"{r.MaxTotal.Value:F2}",
+                ["/общмаксId"] = JoinOrDash(r.MaxTotal.Ids),
+                ["/общмин"] = $"{r.MinTotal.Value:F2}",
+                ["/общминId"] = JoinOrDash(r.MinTotal.Ids),
+                ["/общср"] = $"{r.AvgTotal:F2}",
 
-                ["/сеттмакс"] = $"{GenVM.Report.MaxSettl.Value:F2}",
-                ["/сеттмаксId"] = string.Join(", ", GenVM.Report.MaxSettl.Ids),
-                ["/сеттмин"] = $"{GenVM.Report.MinSettl.Value:F2}",
-                ["/сеттминId"] = string.Join(", ", GenVM.Report.MinSettl.Ids),
-                ["/сеттср"] = $"{GenVM.Report.AvgSettl:F2}",
+                ["/сеттмакс"] = $"{r.MaxSettl.Value:F2}",
+                ["/сеттмаксId"] = JoinOrDash(r.MaxSettl.Ids),
+                ["/сеттмин"] = $"{r.MinSettl.Value:F2}",
+                ["/сеттминId"] = JoinOrDash(r.MinSettl.Ids),
+                ["/сеттср"] = $"{r.AvgSettl:F2}",
 
-                ["/нетдоступа"] = string.Join(", ", GenVM.Report.NoAccessIds),
-                ["/уничтожены"] = string.Join(", ", GenVM.Report.DestroyedIds),
-                ["/новые"] = string.Join(", ", GenVM.Report.NewIds),
+                ["/нетдоступа"] = JoinOrDash(r.NoAccessIds),
+                ["/уничтожены"] = JoinOrDash(r.DestroyedIds),
+                ["/новые"] = JoinOrDash(r.NewIds),
 
-                ["/общ>сп"] = GenVM.ExceedTotalSpDisplay,
-                ["/общ>расч"] = GenVM.ExceedTotalCalcDisplay,
-                ["/отн>сп"] = GenVM.ExceedRelSpDisplay,
-                ["/отн>расч"] = GenVM.ExceedRelCalcDisplay
+                ["/общ>сп"] = DashIfEmpty(GenVM.ExceedTotalSpDisplay),
+                ["/общ>расч"] = DashIfEmpty(GenVM.ExceedTotalCalcDisplay),
+                ["/отн>сп"] = DashIfEmpty(GenVM.ExceedRelSpDisplay),
+                ["/отн>расч"] = DashIfEmpty(GenVM.ExceedRelCalcDisplay),
             };
+
             return map;
         }
+
+
 
         private void AddRelativeSheet(XLWorkbook wb)
         {
@@ -308,10 +558,9 @@ namespace Osadka.ViewModels
                 ws.Cell(r, 2).Value = row.Id2;
                 ws.Cell(r, 3).Value = row.Distance;
                 ws.Cell(r, 4).Value = row.DeltaTotal;
-                ws.Cell(r, 5).Value = row.Ratio;
+                ws.Cell(r, 5).Value = $"{row.Ratio:F5}";
                 r++;
             }
-
 
             int lastDataRow = r - 1;
             var rng = ws.Range(1, 1, lastDataRow, 5);
@@ -322,49 +571,87 @@ namespace Osadka.ViewModels
             rng.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
             ws.Row(1).Style.Font.Bold = true;
             ws.Columns(1, 5).AdjustToContents();
-
         }
 
         private void AddDynamicsSheet(XLWorkbook wb)
         {
+            const string sheetName = "Графики динамики";
+            const string tableName = "DynTable";
+
+            var ws = wb.Worksheets.FirstOrDefault(s =>
+                         s.Name.Equals(sheetName, StringComparison.OrdinalIgnoreCase))
+                     ?? wb.AddWorksheet(sheetName);
+
+            var cycles = RawVM?.CurrentCycles?.Keys?.OrderBy(c => c).ToList()
+                         ?? new System.Collections.Generic.List<int>();
+
             var dynVm = new DynamicsGrafficViewModel(RawVM, _dynSvc);
-            var ws = wb.AddWorksheet("Графики динамики");
+
             ws.Cell(1, 1).Value = "Id";
-            var cycles = RawVM.CurrentCycles.Keys.OrderBy(c => c).ToList();
             for (int i = 0; i < cycles.Count; i++)
-                ws.Cell(1, i + 2).Value = $"Cycle {cycles[i]}";
+            {
+                int cyc = cycles[i];
+
+                string headerText;
+                if (RawVM.CycleHeaders.TryGetValue(cyc, out var rawLabel))
+                    headerText = CycleLabelParsing.ExtractDateTail(rawLabel) ?? rawLabel;
+                else
+                    headerText = $"Cycle {cyc}";
+
+                ws.Cell(1, i + 2).Value = headerText;
+            }
+
+            var colByCycle = cycles
+                .Select((cycle, idx) => new { cycle, col = idx + 2 })
+                .ToDictionary(x => x.cycle, x => x.col);
 
             int r = 2;
             foreach (var ser in dynVm.Lines)
             {
                 ws.Cell(r, 1).Value = ser.Id;
+
                 foreach (var pt in ser.Points)
                 {
-                    int c = cycles.IndexOf(pt.Cycle) + 2;
-                    ws.Cell(r, c).Value = pt.Mark;
+                    if (!colByCycle.TryGetValue(pt.Cycle, out int col)) continue;
+
+                    var cell = ws.Cell(r, col);
+                    cell.Value = pt.Mark;
                 }
                 r++;
             }
 
-            using var ms = new MemoryStream();
+            int lastRow = Math.Max(2, r - 1);
+            int lastCol = Math.Max(2, cycles.Count + 1);
+            var dataRange = ws.Range(1, 1, lastRow, lastCol);
 
-            var tmpFile = Path.GetTempFileName();
-            var png = new OxyPlot.Wpf.PngExporter
+            ws.Row(1).Style.Font.Bold = true;
+            dataRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            ws.Columns(1, lastCol).AdjustToContents();
+
+            var dynTable = ws.Tables.FirstOrDefault(t =>
+                t.Name.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+
+            if (dynTable != null)
             {
-                Width = 800,
-                Height = 400,
+                dynTable.Resize(dataRange);
+                dynTable.ShowAutoFilter = false;
             }
-            ;
-             using (var fs = File.OpenWrite(tmpFile))
-                png.Export(dynVm.PlotModel, fs);
+            else
+            {
+                var created = dataRange.CreateTable(tableName);
+                created.ShowAutoFilter = false;
+                created.Theme = XLTableTheme.TableStyleMedium2;
+            }
 
-            ws.AddPicture(tmpFile)
-              .MoveTo(ws.Cell(1, cycles.Count + 4))
-              .WithSize(800, 400);
+            var wbDynData = wb.DefinedNames.FirstOrDefault(n =>
+                n.Name.Equals("DynData", StringComparison.OrdinalIgnoreCase));
+            wbDynData?.Delete();
 
-            File.Delete(tmpFile);
+            var wsDynData = ws.DefinedNames.FirstOrDefault(n =>
+                n.Name.Equals("DynData", StringComparison.OrdinalIgnoreCase));
+            wsDynData?.Delete();
+
+            wb.CalculateMode = XLCalculateMode.Auto;
         }
-
-
     }
 }

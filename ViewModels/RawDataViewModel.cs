@@ -1,4 +1,5 @@
-﻿using ClosedXML.Excel;
+﻿
+using ClosedXML.Excel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -9,21 +10,66 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
-using System.IO;
+
 namespace Osadka.ViewModels;
 
 public partial class RawDataViewModel : ObservableObject
 {
-        public ObservableCollection<int> CycleNumbers { get; } = new();
+    public IRelayCommand OpenTemplate { get; }
+    public ObservableCollection<int> CycleNumbers { get; } = new();
     [ObservableProperty]
     private CycleHeader header = new();
     private readonly Dictionary<int, string> _cycleHeaders = new();
     public IReadOnlyDictionary<int, string> CycleHeaders => _cycleHeaders;
 
     [ObservableProperty] private string _selectedCycleHeader = string.Empty;
+
+    public enum CoordUnits
+    {
+        Millimeters,
+        Centimeters,
+        Decimeters,
+        Meters
+    }
+
+    public IReadOnlyList<CoordUnits> CoordUnitValues { get; } =
+        Enum.GetValues(typeof(CoordUnits)).Cast<CoordUnits>().ToList();
+
+    [ObservableProperty]
+    private CoordUnits coordUnit = CoordUnits.Millimeters;
+
+    public double CoordScale => coordUnit switch
+    {
+        CoordUnits.Millimeters => 1,
+        CoordUnits.Centimeters => 10,
+        CoordUnits.Decimeters => 100,
+        _ => 1000        // Meters
+    };
+
+    partial void OnCoordUnitChanged(CoordUnits oldVal, CoordUnits newVal)
+    {
+        double oldScale = oldVal switch
+        {
+            CoordUnits.Millimeters => 1,
+            CoordUnits.Centimeters => 10,
+            CoordUnits.Decimeters => 100,
+            _ => 1000        // Meters
+        };
+
+        double k = CoordScale / oldScale;
+
+        foreach (var p in CoordRows)
+        {
+            p.X *= k;
+            p.Y *= k;
+        }
+    }
 
     private void RefreshData()
     {
@@ -38,8 +84,9 @@ public partial class RawDataViewModel : ObservableObject
                 foreach (var r in rows) DataRows.Add(r);
             }
         }
+
         SelectedCycleHeader =
-    _cycleHeaders.TryGetValue(Header.CycleNumber, out var h) ? h : string.Empty;
+            _cycleHeaders.TryGetValue(Header.CycleNumber, out var h) ? h : string.Empty;
 
         OnPropertyChanged(nameof(ShowPlaceholder));
     }
@@ -56,6 +103,7 @@ public partial class RawDataViewModel : ObservableObject
 
     public RawDataViewModel()
     {
+        OpenTemplate = new RelayCommand(Opentemp);
         PasteCommand = new RelayCommand(OnPaste);
         LoadFromWorkbookCommand = new RelayCommand(OnLoadWorkbook);
         ClearCommand = new RelayCommand(OnClear);
@@ -69,11 +117,10 @@ public partial class RawDataViewModel : ObservableObject
                     CoordRows.Clear();
                     foreach (var pt in msg.Points)
                     {
-                        CoordRows.Add(new CoordRow { X = pt.X, Y = pt.Y });
+                        CoordRows.Add(new CoordRow { X = pt.X * CoordScale, Y = pt.Y * CoordScale });
                     }
                     OnPropertyChanged(nameof(ShowPlaceholder));
                 });
-
     }
 
     public bool ShowPlaceholder => DataRows.Count == 0 && CoordRows.Count == 0;
@@ -95,6 +142,27 @@ public partial class RawDataViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowPlaceholder));
     }
 
+
+    private static bool LooksLikeHeader(string[] cells)
+    {
+        var joined = string.Join(" ", cells).ToLowerInvariant();
+        if (joined.Contains("отмет") || joined.Contains("осад") || joined.Contains("суммар") ||
+            joined.Contains("№") || joined.Contains("марка") || joined.Contains("cycle") || joined.Contains("id"))
+            return true;
+
+        int nonNumeric = 0;
+        for (int i = 0; i < cells.Length; i++)
+        {
+            var t = (cells[i] ?? string.Empty).Trim();
+            if (System.Text.RegularExpressions.Regex.IsMatch(t, @"\bнов", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                continue;
+
+            if (!double.TryParse(t.Replace(',', '.'), System.Globalization.NumberStyles.Any,
+                                  System.Globalization.CultureInfo.InvariantCulture, out _))
+                nonNumeric++;
+        }
+        return nonNumeric >= Math.Max(2, cells.Length - 1);
+    }
     private void OnPaste()
     {
         if (!Clipboard.ContainsText()) return;
@@ -132,7 +200,7 @@ public partial class RawDataViewModel : ObservableObject
                                      NumberStyles.Any, CultureInfo.InvariantCulture, out double y))
                     continue;
 
-                CoordRows.Add(new CoordRow { X = x, Y = y });
+                CoordRows.Add(new CoordRow { X = x * CoordScale, Y = y * CoordScale });
             }
 
             OnPropertyChanged(nameof(ShowPlaceholder));
@@ -148,6 +216,7 @@ public partial class RawDataViewModel : ObservableObject
             {
                 var arr = ln.Split('\t');
                 if (arr.Length < 3) continue;
+                if (LooksLikeHeader(arr)) continue;
 
                 var (markVal, markRaw) = TryParse(arr[0]);
                 var (settlVal, settlRaw) = TryParse(arr[1]);
@@ -179,6 +248,7 @@ public partial class RawDataViewModel : ObservableObject
             {
                 var arr = ln.Split('\t');
                 if (arr.Length < 4) continue;
+                if (LooksLikeHeader(arr)) continue;
 
                 string markRaw = arr[0];
                 string settlRaw = arr[1];
@@ -221,6 +291,7 @@ public partial class RawDataViewModel : ObservableObject
         cycles[Header.CycleNumber] = DataRows.ToList();
         OnPropertyChanged(nameof(ShowPlaceholder));
     }
+
     private static (double? val, string raw) TryParse(string txt)
     {
         txt = txt.Trim();
@@ -232,10 +303,11 @@ public partial class RawDataViewModel : ObservableObject
                             NumberStyles.Any,
                             CultureInfo.InvariantCulture,
                             out double v))
-            return (v, txt); 
+            return (v, txt);
 
         return (null, txt);
     }
+
     private void OnLoadWorkbook()
     {
         var dlg = new Microsoft.Win32.OpenFileDialog
@@ -246,6 +318,26 @@ public partial class RawDataViewModel : ObservableObject
             LoadWorkbookFromFile(dlg.FileName);
     }
 
+    private void Opentemp()
+    {
+        string exeDir = AppContext.BaseDirectory;
+        string template = Path.Combine(exeDir, "template.xlsx");
+        if (!File.Exists(template))
+        {
+            MessageBox.Show("template.xlsx не найден", "Экспорт",
+                            MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        if (File.Exists(template))
+            Process.Start(new ProcessStartInfo(template) { UseShellExecute = true });
+        else
+            MessageBox.Show("Файл справки не найден.",
+                            "Справка",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+    }
+
     public void LoadWorkbookFromFile(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -253,52 +345,73 @@ public partial class RawDataViewModel : ObservableObject
 
         try
         {
-            using var wb = new XLWorkbook(filePath);
+            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var wb = new XLWorkbook(stream);
 
-            var ws = SelectWorksheet(wb);
-            if (ws == null) return;
-
-            var objHeaders = FindObjectHeaders(ws);
-            if (objHeaders.Count == 0)
+            var dlg = new Osadka.Views.ImportSelectionWindow(wb)
             {
-                MessageBox.Show("На листе не найдены объекты (№ марки).",
-                                "Импорт", MessageBoxButton.OK, MessageBoxImage.Information);
+                Owner = Application.Current?.MainWindow
+            };
+
+            if (dlg.ShowDialog() != true)
                 return;
-            }
 
-            int objIdx = (objHeaders.Count == 1)
-                ? 1
-                : (AskInt($"Объектов: {objHeaders.Count}\nВведите № объекта:",
-                          1, objHeaders.Count, out int v) ? v : 0);
-            if (objIdx == 0) return;
+            var ws = dlg.SelectedWorksheet;
+            var objHeaders = dlg.ObjectHeaders;
+            var cycleStarts = dlg.CycleStarts;
+            int objIdx = dlg.SelectedObjectIndex;
+            int cycleIdx = dlg.SelectedCycleIndex;
 
-            var (headerRow, idHeaderCell) = objHeaders[objIdx - 1];
-            int idCol = idHeaderCell.Address.ColumnNumber;
-            int subHeaderRow = headerRow + 1;
-
-            var cycleStarts = FindCycleStarts(ws, subHeaderRow, idCol);
-            if (cycleStarts.Count == 0)
+            if (cycleStarts == null || cycleStarts.Count == 0)
             {
-                MessageBox.Show("Не найдено столбцов «Отметка, м».",
-                                "Импорт", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
+                if (objHeaders == null || objHeaders.Count == 0)
+                    throw new InvalidOperationException("Не найдены заголовки объектов на листе.");
 
-            int cycleIdx = (cycleStarts.Count == 1)
-                ? 1
-                : (AskInt($"Циклов: {cycleStarts.Count}\nВведите № цикла:",
-                          1, cycleStarts.Count, out int c) ? c : 0);
-            if (cycleIdx == 0) return;
+                var hdrTuple = objIdx >= 1 && objIdx <= objHeaders.Count
+                    ? objHeaders[objIdx - 1]
+                    : objHeaders.First();
+
+                int idCol = hdrTuple.Cell.Address.ColumnNumber;
+                int subHdrRow = FindSubHeaderRow(ws, hdrTuple.Row, idCol, new List<int>());
+                var computed = FindCycleStarts(ws, subHdrRow, idCol);
+
+                if (computed.Count == 0)
+                {
+                    int lastRow = ws.LastRowUsed().RowNumber();
+                    for (int r = hdrTuple.Row; r <= Math.Min(hdrTuple.Row + 10, lastRow); r++)
+                    {
+                        var anyOtm = ws.Row(r).Cells().Any(c =>
+                            Regex.IsMatch(c.GetString(), @"^\s*Отметка", RegexOptions.IgnoreCase));
+                        if (anyOtm)
+                        {
+                            subHdrRow = r;
+                            computed = FindCycleStarts(ws, subHdrRow, idCol);
+                            if (computed.Count > 0) break;
+                        }
+                    }
+                }
+
+                cycleStarts = computed;
+            }
+            _cycleHeaders.Clear();
+
             ReadAllObjects(ws, objHeaders, cycleStarts);
 
             ObjectNumbers.Clear();
             foreach (var k in _objects.Keys.OrderBy(k => k)) ObjectNumbers.Add(k);
 
             CycleNumbers.Clear();
-            foreach (var k in _objects[objIdx].Keys.OrderBy(k => k)) CycleNumbers.Add(k);
+            if (_objects.TryGetValue(objIdx, out var dict))
+            {
+                foreach (var k in dict.Keys.OrderBy(k => k)) CycleNumbers.Add(k);
+            }
 
             Header.ObjectNumber = objIdx;
-            Header.CycleNumber = cycleIdx;
+
+            if (CycleNumbers.Count > 0 && !CycleNumbers.Contains(cycleIdx))
+                Header.CycleNumber = CycleNumbers[0];
+            else
+                Header.CycleNumber = cycleIdx;
 
             RefreshData();
         }
@@ -339,6 +452,43 @@ public partial class RawDataViewModel : ObservableObject
                  .Where(col => col != idColumn)
                  .ToList();
 
+        int FindSubHeaderRow(IXLWorksheet s, int headerRow, int idColumn, List<int> cycCols)
+        {
+            int lastRow = s.LastRowUsed().RowNumber();
+            int row = headerRow + 1;
+            int maxLookahead = Math.Min(headerRow + 6, lastRow);
+
+            for (; row <= maxLookahead; row++)
+            {
+                bool looksLikeSub = cycCols.Any(c =>
+                    Regex.IsMatch(s.Cell(row, c).GetString(), @"отметка", RegexOptions.IgnoreCase));
+
+                bool nextHasOtm = row + 1 <= lastRow && cycCols.Any(c =>
+                    Regex.IsMatch(s.Cell(row + 1, c).GetString(), @"отметка", RegexOptions.IgnoreCase));
+                bool thisHasAny = cycCols.Any(c => !string.IsNullOrWhiteSpace(s.Cell(row, c).GetString()));
+
+                if (looksLikeSub) return row;
+                if (thisHasAny && nextHasOtm) return row + 1;
+            }
+
+            return headerRow + 1;
+        }
+
+        string BuildCycleHeaderLabel(IXLWorksheet s, int startCol, int subRow, int headerRow)
+        {
+            var parts = new List<string>();
+            int r1 = subRow - 1;
+            int r2 = subRow - 2;
+
+            if (r2 >= headerRow && !string.IsNullOrWhiteSpace(s.Cell(r2, startCol).GetString()))
+                parts.Add(s.Cell(r2, startCol).GetString().Trim());
+
+            if (r1 >= headerRow && !string.IsNullOrWhiteSpace(s.Cell(r1, startCol).GetString()))
+                parts.Add(s.Cell(r1, startCol).GetString().Trim());
+
+            return string.Join(" ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+        }
+
         void ReadAllObjects(IXLWorksheet sheet,
                             List<(int Row, IXLCell Cell)> headers,
                             List<int> cycleCols)
@@ -348,7 +498,9 @@ public partial class RawDataViewModel : ObservableObject
             foreach (var (hdr, objNumber) in headers.Select((h, i) => (h, i + 1)))
             {
                 int idColLocal = hdr.Cell.Address.ColumnNumber;
-                int subHdrRowLocal = hdr.Row + 1;
+
+                int subHdrRowLocal = FindSubHeaderRow(sheet, hdr.Row, idColLocal, cycleCols);
+
                 int dataRowFirst = subHdrRowLocal + 1;
                 int dataRowLast = (objNumber == headers.Count
                                         ? sheet.LastRowUsed().RowNumber()
@@ -358,21 +510,41 @@ public partial class RawDataViewModel : ObservableObject
 
                 foreach (var (cycIdx, startCol) in cycleCols.Select((c, i) => (i + 1, c)))
                 {
-                    var rows = new List<MeasurementRow>();
-                    int headerRowLocal = subHdrRowLocal - 1;
-                    string cycLabel = sheet.Cell(headerRowLocal, startCol).GetString().Trim();
+                    string cycLabel = BuildCycleHeaderLabel(sheet, startCol, subHdrRowLocal, hdr.Row);
                     if (!string.IsNullOrWhiteSpace(cycLabel))
                         _cycleHeaders[cycIdx] = cycLabel;
 
+                    var rows = new List<MeasurementRow>();
+                    int blanksInARow = 0;
+
                     for (int r = dataRowFirst; r <= dataRowLast; r++)
                     {
-                        var idText = sheet.Cell(r, idColLocal).GetString().Trim();
-                        if (string.IsNullOrEmpty(idText)) break;
+                        string idText = sheet.Cell(r, idColLocal).GetString().Trim();
+
+                        if (Regex.IsMatch(idText, @"^\s*№\s*мар", RegexOptions.IgnoreCase))
+                            break;
+
+                        if (string.IsNullOrEmpty(idText))
+                        {
+                            blanksInARow++;
+                            if (blanksInARow >= 3) break;
+                            continue;
+                        }
+                        blanksInARow = 0;
 
                         var (mark, markRaw) = ParseCell(sheet.Cell(r, startCol));
                         var (settl, settlRaw) = ParseCell(sheet.Cell(r, startCol + 1));
                         var (total, totalRaw) = ParseCell(sheet.Cell(r, startCol + 2));
 
+                        if (mark is null && settl is null && total is null &&
+                            string.IsNullOrWhiteSpace(markRaw) &&
+                            string.IsNullOrWhiteSpace(settlRaw) &&
+                            string.IsNullOrWhiteSpace(totalRaw))
+                        {
+                            continue;
+                        }
+                        if (settl.HasValue) settl = Math.Round(settl.Value, 1);
+                        if (total.HasValue) total = Math.Round(total.Value, 1);
                         rows.Add(new MeasurementRow
                         {
                             Id = idText,
@@ -385,42 +557,15 @@ public partial class RawDataViewModel : ObservableObject
                             Cycle = cycIdx
                         });
                     }
+
                     cyclesDict[cycIdx] = rows;
                 }
+
                 _objects[objNumber] = cyclesDict;
             }
         }
     }
 
-    private static (int? num, DateTime? date) ParseCycleHeader(string txt)
-    {
-        int? n = null; DateTime? d = null;
-
-        var m = Regex.Match(txt, @"№\s*(\d+)");
-        if (m.Success) n = int.Parse(m.Groups[1].Value);
-
-        m = Regex.Match(txt, @"(\d{2}\.\d{2}\.\d{4})");
-        if (m.Success) d = DateTime.ParseExact(
-            m.Groups[1].Value, "dd.MM.yyyy", CultureInfo.InvariantCulture);
-
-        return (n, d);
-    }
-
-
-    private static double ReadNumber(IXLCell cell)
-    {
-        var txt = cell.GetString().Trim();
-        if (Regex.IsMatch(txt, @"\bнов", RegexOptions.IgnoreCase))
-            return 0;
-        if (cell.DataType == XLDataType.Number)
-            return cell.GetDouble();
-        if (double.TryParse(txt.Replace(',', '.'),
-                            NumberStyles.Any,
-                            CultureInfo.InvariantCulture,
-                            out double val))
-            return val;
-        return 0;
-    }
     private static (double? val, string raw) ParseCell(IXLCell cell)
     {
         string txt = cell.GetString().Trim();
@@ -438,13 +583,16 @@ public partial class RawDataViewModel : ObservableObject
             return (v, txt);
 
         return (null, txt);
-    } 
+    }
+
     public Dictionary<int, Dictionary<int, List<MeasurementRow>>> Objects
        => _objects;
+
     public IReadOnlyDictionary<int, List<MeasurementRow>> CurrentCycles =>
-    _objects.TryGetValue(Header.ObjectNumber, out var cycles)
-        ? cycles
-        : new Dictionary<int, List<MeasurementRow>>();
+        _objects.TryGetValue(Header.ObjectNumber, out var cycles)
+            ? cycles
+            : new Dictionary<int, List<MeasurementRow>>();
+
     private static bool AskInt(string prompt, int min, int max, out int value)
     {
         value = 0;

@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <ApplicationIcon>heavy-rain.ico</ApplicationIcon>
+    <ApplicationIcon>rn.ico</ApplicationIcon>
     <FileUpgradeFlags>40</FileUpgradeFlags>
     <UpgradeBackupLocation>C:\Users\Gorji\source\repos\Osadkaend\Backup\</UpgradeBackupLocation>
     <OldToolsVersion>Current</OldToolsVersion>
@@ -19,7 +19,18 @@
     <None Remove="template.xlsx" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="heavy-rain.ico" />
+    <COMReference Include="Accessibility">
+      <WrapperTool>tlbimp</WrapperTool>
+      <VersionMinor>1</VersionMinor>
+      <VersionMajor>1</VersionMajor>
+      <Guid>1ea4dbf0-3c3b-11cf-810c-00aa00389b71</Guid>
+      <Lcid>0</Lcid>
+      <Isolated>false</Isolated>
+      <EmbedInteropTypes>true</EmbedInteropTypes>
+    </COMReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="rn.ico" />
     <Content Include="help.docx">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
@@ -30,6 +41,8 @@
     <PackageReference Include="Autoupdater.NET.Official" Version="1.9.2" />
     <PackageReference Include="ClosedXML" Version="0.105.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
+    <PackageReference Include="Microsoft.Office.Interop.Excel" Version="15.0.4795.1001" />
     <PackageReference Include="OxyPlot.Core" Version="2.2.0" />
     <PackageReference Include="OxyPlot.Wpf" Version="2.2.0" />
     <PackageReference Include="ScottPlot" Version="5.0.55" />
@@ -43,12 +56,8 @@
     </Content>
   </ItemGroup>
 	<Target Name="SquirrelReleasify" AfterTargets="Publish">
-  <Message Text="→ Squirrel: releasify $(PublishDir)Osadka.exe → $(SquirrelReleaseDir)" Importance="high"/>
-  <Exec
-    Command="&quot;$(SquirrelExe)&quot; --releasify &quot;$(PublishDir)Osadka.exe&quot; --output-dir &quot;$(SquirrelReleaseDir)&quot;"
-    WorkingDirectory="$(ProjectDir)" />
-		<Message Text="→ Squirrel: releasify $(PublishDir)Osadka.exe → $(SquirrelReleaseDir)" Importance="high" />
-		<Exec Command="&quot;$(SquirrelExe)&quot; --releasify &quot;$(PublishDir)Osadka.exe&quot; --output-dir &quot;$(SquirrelReleaseDir)&quot;" WorkingDirectory="$(ProjectDir)" />
+  <Message Text="→ Squirrel: releasify $(PublishDir)Osadka.exe → $(SquirrelReleaseDir)" Importance="high" />
+  
 </Target>
 
 </Project>

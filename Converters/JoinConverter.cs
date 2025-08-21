@@ -7,6 +7,7 @@ namespace Osadka.Converters;
 
 public class JoinConverter : IValueConverter
 {
+    public string Separator { get; set; } = ", ";
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
         value switch
         {

@@ -14,6 +14,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.Text.RegularExpressions;
 
 namespace Osadka.Views
 {
@@ -70,5 +71,34 @@ namespace Osadka.Views
                 vm.LoadWorkbookFromFile(path);
             }
         }
+
+
+        // --- Allow digits, minus, dot and comma in limit textboxes ---
+        private static readonly Regex _allowed = new Regex(@"^[0-9\.,\-]+$");
+
+        private void Limit_PreviewTextInput(object sender, TextCompositionEventArgs e)
+        {
+            e.Handled = !_allowed.IsMatch(e.Text);
+        }
+
+        private void Limit_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Space) e.Handled = true;
+        }
+
+        private void Limit_Pasting(object sender, DataObjectPastingEventArgs e)
+        {
+            if (e.DataObject.GetDataPresent(DataFormats.Text))
+            {
+                var text = (string)e.DataObject.GetData(DataFormats.Text);
+                if (string.IsNullOrWhiteSpace(text) || !_allowed.IsMatch(text.Replace(" ", "")))
+                    e.CancelCommand();
+            }
+            else
+            {
+                e.CancelCommand();
+            }
+        }
+
     }
 }

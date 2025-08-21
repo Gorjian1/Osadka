@@ -4,8 +4,11 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Data;
 using Osadka.ViewModels;
 using WpfPoint = System.Windows.Point;
+using System.IO;
+using System.Linq;
 
 namespace Osadka.Views
 {
@@ -24,27 +27,90 @@ namespace Osadka.Views
         public CoordinateExporting(RawDataViewModel raw)
         {
             InitializeComponent();
-
             DataContext = new CoordinateExportingViewModel(raw);
 
             Loaded += (_, __) => Fit();
             SizeChanged += (_, __) => Fit();
+
             OverlayCanvas.Children.Add(_ruler);
             OverlayCanvas.Children.Add(_label);
             _ruler.Visibility = _label.Visibility = Visibility.Collapsed;
 
+            BtnLayers.ContextMenu = BuildLayersMenu();
+            AllowDrop = true;
+            PreviewDragOver += OnDwgDragOver;
+            Drop += OnDwgDrop;
+
+            ImageHost.AllowDrop = true;    
+
+            ImageHost.PreviewDragOver += OnDwgDragOver;
+            ImageHost.Drop += OnDwgDrop;            
+
             Focusable = true;
             Focus();
+
         }
-        private void BtnBuildMap_Click(object sender, RoutedEventArgs e)
+
+
+        private DataTemplate CreateLayerItemTemplate()
         {
-            Vm.BuildMapCmd.Execute(null);
+            var f = new FrameworkElementFactory(typeof(CheckBox));
+            f.SetBinding(CheckBox.IsCheckedProperty, new Binding("IsVisible") { Mode = BindingMode.TwoWay });
+            f.SetBinding(CheckBox.ContentProperty, new Binding("Name"));
+            f.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 2, 6, 2));
+            return new DataTemplate { VisualTree = f };
         }
+
+        private ContextMenu BuildLayersMenu()
+        {
+            var menu = new ContextMenu { StaysOpen = true };
+
+            var items = new ItemsControl
+            {
+                ItemsSource = Vm.Layers,
+                ItemTemplate = CreateLayerItemTemplate(),
+                Margin = new Thickness(4)
+            };
+
+            var scroll = new ScrollViewer
+            {
+                MaxHeight = 320,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = items
+            };
+
+            var btnAll = new Button { Content = "Все", Margin = new Thickness(0, 0, 6, 0) };
+            var btnNone = new Button { Content = "Ничего" };
+            btnAll.Click += (_, __) => { foreach (var l in Vm.Layers) l.IsVisible = true; };
+            btnNone.Click += (_, __) => { foreach (var l in Vm.Layers) l.IsVisible = false; };
+
+            var buttons = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(6)
+            };
+            buttons.Children.Add(btnAll);
+            buttons.Children.Add(btnNone);
+
+            var panel = new StackPanel();
+            panel.Children.Add(scroll);
+            panel.Children.Add(new Separator());
+            panel.Children.Add(buttons);
+
+            var container = new MenuItem { StaysOpenOnClick = true };
+            container.Header = panel;
+            menu.Items.Add(container);
+
+            return menu;
+        }
+
         private void BtnOpen_Click(object sender, RoutedEventArgs e)
         {
             Vm.OpenDwgCommand.Execute(null);
-            UpdateToolbarButtons();
         }
+        private void BtnExport_Click(object sender, RoutedEventArgs e) => Vm.ExportCoordsCmd.Execute(null);
+        private void BtnSend_Click(object sender, RoutedEventArgs e) => Vm.SendToDataCmd.Execute(null);
 
         private void BtnRuler_Click(object sender, RoutedEventArgs e)
         {
@@ -55,7 +121,6 @@ namespace Osadka.Views
                 _measureStart = null;
                 _ruler.Visibility = _label.Visibility = Visibility.Collapsed;
             }
-            UpdateToolbarButtons();
         }
 
         private void BtnSelect_Click(object sender, RoutedEventArgs e)
@@ -66,18 +131,13 @@ namespace Osadka.Views
                 Vm.IsMeasureMode = false;
                 SelectedPointsClearOverlay();
             }
-            UpdateToolbarButtons();
         }
-
-        private void BtnExport_Click(object sender, RoutedEventArgs e)
+        private void BtnLayers_Click(object sender, RoutedEventArgs e)
         {
-            Vm.ExportCoordsCmd.Execute(null);
-        }
-
-        private void UpdateToolbarButtons()
-        {
-            BtnRuler.Background = Vm.IsMeasureMode ? Brushes.LightBlue : Brushes.Transparent;
-            BtnSelect.Background = Vm.IsSelectMode ? Brushes.LightBlue : Brushes.Transparent;
+            if (BtnLayers.ContextMenu == null) return;
+            BtnLayers.ContextMenu.DataContext = DataContext;
+            BtnLayers.ContextMenu.PlacementTarget = BtnLayers;
+            BtnLayers.ContextMenu.IsOpen = true;
         }
 
         private void SelectedPointsClearOverlay()
@@ -87,10 +147,8 @@ namespace Osadka.Views
             OverlayCanvas.Children.Add(_label);
             Vm.SelectedPoints.Clear();
         }
-        private void Fit()
-        {
-            Vm.FitToViewport(Viewport.ActualWidth, Viewport.ActualHeight - 30);
-        }
+
+        private void Fit() => Vm.FitToViewport(Viewport.ActualWidth, Viewport.ActualHeight - 30);
 
         private void ImageWheel(object sender, MouseWheelEventArgs e)
         {
@@ -107,6 +165,7 @@ namespace Osadka.Views
             Viewport.ScrollToHorizontalOffset(cx * k - p.X);
             Viewport.ScrollToVerticalOffset(cy * k - p.Y);
         }
+
         private void Viewport_RightDown(object s, MouseButtonEventArgs e)
         {
             _panning = true;
@@ -143,6 +202,7 @@ namespace Osadka.Views
                 e.Handled = true;
             }
         }
+
         private void Viewport_LeftDown(object s, MouseButtonEventArgs e)
         {
             var p = e.GetPosition(ImageHost);
@@ -154,30 +214,26 @@ namespace Osadka.Views
             else if (Vm.IsSelectMode)
             {
                 var cad = PxToCad(p);
-                Vm.SelectedPoints.Add(new WpfPoint(cad.X, cad.Y));
 
-                const double sz = 6;
-                var l1 = new Line
-                {
-                    X1 = p.X - sz,
-                    Y1 = p.Y - sz,
-                    X2 = p.X + sz,
-                    Y2 = p.Y + sz,
-                    Stroke = Brushes.Red,
-                    StrokeThickness = 2
-                };
-                var l2 = new Line
-                {
-                    X1 = p.X - sz,
-                    Y1 = p.Y + sz,
-                    X2 = p.X + sz,
-                    Y2 = p.Y - sz,
-                    Stroke = Brushes.Red,
-                    StrokeThickness = 2
-                };
-                OverlayCanvas.Children.Add(l1);
-                OverlayCanvas.Children.Add(l2);
+                double tolWorld = 8.0 / Vm.PixelsPerUnit;
+                var snapped = Vm.SnapToNearest(cad.X, cad.Y, tolWorld, snapOnEdge: true);
+                var use = snapped ?? (cad.X, cad.Y);
+
+                Vm.SelectedPoints.Add(new WpfPoint(use.Item1, use.Item2));
+
+                var px = (use.Item1 - Vm.MinX) * Vm.PixelsPerUnit;
+                var py = (Vm.MaxY - use.Item2) * Vm.PixelsPerUnit;
+                DrawCross(px, py);
             }
+        }
+
+        private void DrawCross(double x, double y)
+        {
+            const double sz = 6;
+            var l1 = new Line { X1 = x - sz, Y1 = y - sz, X2 = x + sz, Y2 = y + sz, Stroke = Brushes.Red, StrokeThickness = 2 };
+            var l2 = new Line { X1 = x - sz, Y1 = y + sz, X2 = x + sz, Y2 = y - sz, Stroke = Brushes.Red, StrokeThickness = 2 };
+            OverlayCanvas.Children.Add(l1);
+            OverlayCanvas.Children.Add(l2);
         }
 
         private void UserControl_KeyDown(object sender, KeyEventArgs e)
@@ -220,12 +276,42 @@ namespace Osadka.Views
 
         private (double X, double Y) PxToCad(WpfPoint p)
         {
-            double imgX = (p.X + Viewport.HorizontalOffset) / Vm.EffectiveScale;
-            double imgY = (p.Y + Viewport.VerticalOffset) / Vm.EffectiveScale;
-
-            double dwgX = Vm.MinX + imgX / Vm.PixelsPerUnit;
-            double dwgY = Vm.MaxY - imgY / Vm.PixelsPerUnit;
+            double dwgX = Vm.MinX + p.X / Vm.PixelsPerUnit;
+            double dwgY = Vm.MaxY - p.Y / Vm.PixelsPerUnit;
             return (dwgX, dwgY);
+        }
+
+        private static bool IsDwg(string path) =>
+            string.Equals(System.IO.Path.GetExtension(path), ".dwg", StringComparison.OrdinalIgnoreCase);
+
+        private static readonly string[] _accept = { ".dwg" };
+
+        private static bool IsAccepted(string path) =>
+            _accept.Contains(System.IO.Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
+        private void OnDwgDragOver(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                var files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                e.Effects = files.Any(IsAccepted) ? DragDropEffects.Copy : DragDropEffects.None;
+            }
+            else
+            {
+                e.Effects = DragDropEffects.None;
+            }
+            e.Handled = true;
+        }
+
+        private void OnDwgDrop(object sender, DragEventArgs e)
+        {
+            if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+
+            var files = (string[])e.Data.GetData(DataFormats.FileDrop);
+            var first = files.FirstOrDefault(IsAccepted);
+            if (first == null) return;
+
+            Vm.OpenDwgFromPath(first);
         }
 
     }
