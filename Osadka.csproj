@@ -1,18 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="Current">
   <PropertyGroup>
     <Version>0.3.0</Version>
-	<SquirrelReleaseDir>$(ProjectDir)releases\</SquirrelReleaseDir>
-	  <SquirrelExe>$(SolutionDir)packages\Squirrel.Windows.1.9.1\tools\Squirrel.exe</SquirrelExe>
+    <SquirrelReleaseDir>$(ProjectDir)releases\</SquirrelReleaseDir>
+    <SquirrelExe>$(SolutionDir)packages\Squirrel.Windows.1.9.1\tools\Squirrel.exe</SquirrelExe>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <ApplicationIcon>rn.ico</ApplicationIcon>
+    <ApplicationIcon>output-onlinepngtools.ico</ApplicationIcon>
     <FileUpgradeFlags>40</FileUpgradeFlags>
-    <UpgradeBackupLocation>C:\Users\Gorji\source\repos\Osadkaend\Backup\</UpgradeBackupLocation>
+    <UpgradeBackupLocation>C:\Users\Gorji\source\repos\HorDeform\Backup\</UpgradeBackupLocation>
     <OldToolsVersion>Current</OldToolsVersion>
-	  
   </PropertyGroup>
   <ItemGroup>
     <None Remove="help.docx" />
@@ -30,13 +29,12 @@
     </COMReference>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="rn.ico" />
+    <Content Include="output-onlinepngtools.ico" />
     <Content Include="help.docx">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
   <ItemGroup>
-	  
     <PackageReference Include="ACadSharp" Version="3.0.8" />
     <PackageReference Include="Autoupdater.NET.Official" Version="1.9.2" />
     <PackageReference Include="ClosedXML" Version="0.105.0" />
@@ -55,9 +53,7 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
-	<Target Name="SquirrelReleasify" AfterTargets="Publish">
-  <Message Text="→ Squirrel: releasify $(PublishDir)Osadka.exe → $(SquirrelReleaseDir)" Importance="high" />
-  
-</Target>
-
+  <Target Name="SquirrelReleasify" AfterTargets="Publish">
+    <Message Text="→ Squirrel: releasify $(PublishDir)Osadka.exe → $(SquirrelReleaseDir)" Importance="high" />
+  </Target>
 </Project>

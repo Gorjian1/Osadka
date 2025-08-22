@@ -6,21 +6,26 @@ namespace Osadka.Models
 {
     public partial class GeneralReport : ObservableObject, IDataErrorInfo
     {
-        [ObservableProperty] private string _MaxGeneralSettelmentNumbers = string.Empty;
-        [ObservableProperty] private string _MinGeneralSettelmentNumbers = string.Empty;
-        [ObservableProperty] private string _AvgGeneralSettelmentNumbers = string.Empty;
+        [ObservableProperty] private string _MaxVectorIds = string.Empty;
+        [ObservableProperty] private string _MinVectorIds = string.Empty;
+        [ObservableProperty] private float _MaxVectorValue;
+        [ObservableProperty] private float _MinVectorValue;
 
-        [ObservableProperty] private string _MaxRelativeNumbers = string.Empty;
-        [ObservableProperty] private string _MinRelativeNumbers = string.Empty;
-        [ObservableProperty] private string _AvgRelativeNumbers = string.Empty;
+        [ObservableProperty] private string _MaxDxIds = string.Empty;
+        [ObservableProperty] private string _MinDxIds = string.Empty;
+        [ObservableProperty] private float _MaxDxValue;
+        [ObservableProperty] private float _MinDxValue;
 
-        [ObservableProperty] private float _MaxGeneralValue;
-        [ObservableProperty] private float _MinGeneralValue;
-        [ObservableProperty] private float _AvgGeneralValue;
+        [ObservableProperty] private string _MaxDyIds = string.Empty;
+        [ObservableProperty] private string _MinDyIds = string.Empty;
+        [ObservableProperty] private float _MaxDyValue;
+        [ObservableProperty] private float _MinDyValue;
 
-        [ObservableProperty] private float _MaxRelativeValue;
-        [ObservableProperty] private float _MinRelativeValue;
-        [ObservableProperty] private float _AvgRelativeValue;
+        [ObservableProperty] private string _MaxDhIds = string.Empty;
+        [ObservableProperty] private string _MinDhIds = string.Empty;
+        [ObservableProperty] private float _MaxDhValue;
+        [ObservableProperty] private float _MinDhValue;
+
 
         [ObservableProperty] private string _CycleLable;
 

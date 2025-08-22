@@ -124,12 +124,16 @@ namespace Osadka.Views
 
         private static List<int> FindCycleStarts(IXLWorksheet sheet, int subHdrRow, int idColumn) =>
             sheet.Row(subHdrRow)
-                 .Cells()
-                 .Where(c => c.GetString().Trim()
-                              .StartsWith("Отметка", StringComparison.OrdinalIgnoreCase))
+                 .CellsUsed()
+                 .Where(c =>
+                 {
+                     string t = c.GetString().Trim();
+                     bool isX = Regex.IsMatch(t, @"^\s*[XxХх]\s*$");
+                     return isX && c.Address.ColumnNumber != idColumn;
+                 })
                  .Select(c => c.Address.ColumnNumber)
-                 .Where(col => col != idColumn)
                  .ToList();
+
     }
 
     public class WorksheetItem

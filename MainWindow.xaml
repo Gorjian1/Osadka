@@ -6,15 +6,15 @@
         xmlns:local="clr-namespace:Osadka"
         mc:Ignorable="d"
         WindowState="Maximized"
-        Title="Osadka" Height="720" Width="1200" MinHeight="500" MinWidth="900"
+        Title="HorDeform" Height="720" Width="1200" MinHeight="500" MinWidth="900"
         FontFamily="Segoe UI" FontSize="14" Background="#FAFAFC">
 
     <Window.Resources>
-        <Color x:Key="Accent">#FF0078D7</Color>
-        <Color x:Key="AccentDark">#FF0050A8</Color>
+        <Color x:Key="Accent">#FFC24E3A</Color>
+        <Color x:Key="AccentDark">#FF8F3A2B</Color>
         <SolidColorBrush x:Key="AccentBrush"      Color="{StaticResource Accent}"/>
         <SolidColorBrush x:Key="AccentBrushDark" Color="{StaticResource AccentDark}"/>
-        <SolidColorBrush x:Key="SidebarBg"        Color="#F4F8FD"/>
+        <SolidColorBrush x:Key="SidebarBg"        Color="#FFF8F2F0"/>
 
         <Style x:Key="NavToggle" TargetType="RadioButton">
             <Setter Property="Foreground" Value="Black"/>
@@ -36,7 +36,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="root" Property="Background" Value="#DCEBFD"/>
+                                <Setter TargetName="root" Property="Background" Value="#FFEAD7D2"/>
                                 <Setter Property="Foreground" Value="{StaticResource AccentBrushDark}"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -62,10 +62,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#EDF3FD"/>
+                                <Setter TargetName="bd" Property="Background" Value="#FFF3E9E7"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#D3E6FF"/>
+                                <Setter TargetName="bd" Property="Background" Value="#FFE7CBC4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -134,7 +134,7 @@
                 </StackPanel>
 
                 <Button Style="{StaticResource ToolbarBtn}" Content="📢 Создать отчёт 📢" FontSize="20" Command="{Binding QuickReportCommand}" Height="46"/>
-                
+
                 <StackPanel>
                     <Separator Margin="10,7" />
                 </StackPanel>

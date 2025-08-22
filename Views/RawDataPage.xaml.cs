@@ -1,9 +1,11 @@
-﻿using Osadka.ViewModels;
+﻿using ClosedXML.Excel;
+using Osadka.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -14,7 +16,6 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
-using System.Text.RegularExpressions;
 
 namespace Osadka.Views
 {
@@ -71,6 +72,7 @@ namespace Osadka.Views
                 vm.LoadWorkbookFromFile(path);
             }
         }
+
 
 
         // --- Allow digits, minus, dot and comma in limit textboxes ---

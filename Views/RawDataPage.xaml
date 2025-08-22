@@ -7,6 +7,17 @@
              mc:Ignorable="d">
 
     <UserControl.Resources>
+        <!-- Brick toolbar background -->
+        <SolidColorBrush x:Key="ToolbarBg" Color="#F8F2F0"/>
+        <SolidColorBrush x:Key="ToolbarBorder" Color="#AC4533"/>
+        <Style TargetType="{x:Type ToolBar}">
+            <Setter Property="Background" Value="{StaticResource ToolbarBg}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource ToolbarBorder}"/>
+        </Style>
+        <Style TargetType="{x:Type ToolBarTray}">
+            <Setter Property="Background" Value="{StaticResource ToolbarBg}"/>
+        </Style>
+
         <conv:RelaxedDoubleConverter x:Key="RelaxedDouble"/>
         <conv:RelaxedDoubleConverter x:Key="RelaxedDoubleConverter"/>
         <Style x:Key="FastGrid" TargetType="{x:Type DataGrid}">
@@ -36,9 +47,9 @@
             <Setter Property="Padding" Value="2"/>
         </Style>
 
-        <SolidColorBrush x:Key="AccentBrush" Color="#FFC8E4FF"/>
-        <SolidColorBrush x:Key="AccentBrushHover" Color="#FFA3CEF6"/>
-        <SolidColorBrush x:Key="AccentBrushPressed" Color="#FF65A3DD"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#FFE7CBC4"/>
+        <SolidColorBrush x:Key="AccentBrushHover" Color="#FFD9A39A"/>
+        <SolidColorBrush x:Key="AccentBrushPressed" Color="#FFAC4533"/>
 
         <Style x:Key="ToolbarAccentButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Static ToolBar.ButtonStyleKey}}">
             <Setter Property="Margin" Value="0,0,6,0"/>
@@ -101,8 +112,8 @@
             <RowDefinition/>
         </Grid.RowDefinitions>
 
-        <ToolBarTray Grid.Row="0" Margin="8,8,8,7">
-            <ToolBar RenderTransformOrigin="0.473,0.517" Margin="-8,0,0,0">
+        <ToolBarTray Grid.Row="0" Margin="8,8,8,7" Background="{StaticResource ToolbarBg}">
+            <ToolBar RenderTransformOrigin="0.473,0.517" Margin="-8,0,0,0" Background="{StaticResource ToolbarBg}" BorderBrush="{StaticResource ToolbarBorder}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -123,7 +134,7 @@
                                 Command="{Binding ClearCommand}"/>
                         <Separator Margin="8,0"/>
                         <Button Style="{StaticResource ToolbarAccentButton}" Content="Открыть шаблон"
-                                Command="{Binding OpenTemplate}" Background="#FFD7E4F4"/>
+                                Command="{Binding OpenTemplate}" Background="{StaticResource AccentBrushHover}"/>
                     </StackPanel>
 
                     <TextBlock Grid.Column="3" Text="{Binding SelectedCycleHeader}" Opacity="0.75"
@@ -149,8 +160,8 @@
             </ToolBar>
         </ToolBarTray>
 
-        <ToolBarTray Margin="0,46,8,26" Grid.RowSpan="3">
-            <ToolBar Margin="0,5,0,5">
+        <ToolBarTray Margin="0,46,8,26" Grid.RowSpan="3" Background="{StaticResource ToolbarBg}">
+            <ToolBar Margin="0,5,0,5" Background="{StaticResource ToolbarBg}" BorderBrush="{StaticResource ToolbarBorder}">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Style="{StaticResource ToolbarLabel}" Text="Макс.Пред. СП:"/>
                     <TextBox Width="80"
