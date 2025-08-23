@@ -30,13 +30,12 @@ namespace Osadka.ViewModels
 
         private readonly RawDataViewModel _raw;
         private readonly GeneralReportService _svc;
-        private readonly RelativeReportService _relSvc;
 
-        public GeneralReportViewModel(RawDataViewModel raw, GeneralReportService svc, RelativeReportService relSvc)
+
+        public GeneralReportViewModel(RawDataViewModel raw, GeneralReportService svc)
         {
             _raw = raw ?? throw new ArgumentNullException(nameof(raw));
             _svc = svc ?? throw new ArgumentNullException(nameof(svc));
-            _relSvc = relSvc ?? throw new ArgumentNullException(nameof(relSvc));
 
             CalculateCommand = new RelayCommand(Recalc);
             OpenTemplate = new RelayCommand(OpenTemplateFile);
@@ -92,12 +91,11 @@ namespace Osadka.ViewModels
 
             if (Report != null)
             {
-                // Пороговые превышения считаем по Vector
                 ExceedTotalSpDisplay = string.Join(", ",
                     Report.ExceedVectorSpIds.Select(id =>
                     {
                         var row = _raw.DataRows.FirstOrDefault(r => r.Id == id);
-                        var val = row?.Vector ?? row?.Total; // запасной вариант, если Vector не заполнен
+                        var val = row?.Vector ?? row?.Total;
                         return val.HasValue ? $"{id}({val.Value:F1})" : id;
                     }));
 
@@ -115,19 +113,10 @@ namespace Osadka.ViewModels
                 ExceedTotalCalcDisplay = string.Empty;
             }
 
-            // Относительные превышения (как было)
             double spLim = _raw.Header.RelNomen ?? 0;
             double calcLim = _raw.Header.RelCalculated ?? 0;
-            var rel = _relSvc.Build(_raw.CoordRows, _raw.DataRows, spLim, calcLim);
 
-            ExceedRelSp = rel.ExceededSpRows.Select(r => $"{r.Id1}-{r.Id2}").ToList();
-            ExceedRelCalc = rel.ExceededCalcRows.Select(r => $"{r.Id1}-{r.Id2}").ToList();
 
-            ExceedRelSpDisplay = string.Join(", ",
-                rel.ExceededSpRows.Select(r => $"{r.Id1}-{r.Id2}({r.Ratio:F5})"));
-
-            ExceedRelCalcDisplay = string.Join(", ",
-                rel.ExceededCalcRows.Select(r => $"{r.Id1}-{r.Id2}({r.Ratio:F5})"));
         }
     }
 }

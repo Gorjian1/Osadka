@@ -215,9 +215,42 @@ namespace Osadka.ViewModels
                     return;
                 }
 
+
                 var sheet = wsItem.Sheet as IXLWorksheet;
+
+                // Сохраним выбор пользователя ещё до чтения
+                int pickObject = 0;
+                int pickCycle = 0;
+                try
+                {
+                    pickObject = win.SelectedObjectIndex;
+                    pickCycle = win.SelectedCycleIndex;
+                }
+                catch { /* на случай изменений окна */ }
+
                 ReadAllObjects(sheet, objList);
+
+                // Применим выбор пользователя (если он валиден)
+                if (pickObject > 0 && _objects.ContainsKey(pickObject))
+                {
+                    Header.ObjectNumber = pickObject;
+
+                    // обновим список циклов и выберем нужный, если он есть
+                    CycleNumbers.Clear();
+                    foreach (var c in _objects[pickObject].Keys.OrderBy(c => c))
+                        CycleNumbers.Add(c);
+
+                    if (CycleNumbers.Contains(pickCycle))
+                        Header.CycleNumber = pickCycle;
+                    else
+                        Header.CycleNumber = CycleNumbers.FirstOrDefault();
+
+                    RefreshData();
+                }
+
+                // Обновим кэш списков (не затирая выбранный цикл)
                 UpdateCache();
+
             }
             catch (Exception ex)
             {
@@ -254,6 +287,53 @@ namespace Osadka.ViewModels
                     throw new InvalidOperationException("Не удалось распознать структуру блока 5/7 столбцов.");
             }
             return hasH ? 7 : 5;
+        }
+
+
+        private static (int colX, int colY, int colH, int colDx, int colDy, int colDh, int colVector)
+            MapColumns(IXLWorksheet s, int subHdrRow, int startCol, int width)
+        {
+            int endCol = startCol + width - 1;
+            int colX = -1, colY = -1, colH = -1, colDx = -1, colDy = -1, colDh = -1, colVector = -1;
+
+            for (int c = startCol; c <= endCol; c++)
+            {
+                string h = s.Cell(subHdrRow, c).GetString();
+                if (colX < 0 && IsX(h)) { colX = c; continue; }
+                if (colY < 0 && IsY(h)) { colY = c; continue; }
+                if (colH < 0 && IsH(h)) { colH = c; continue; }
+                if (colDx < 0 && IsDx(h)) { colDx = c; continue; }
+                if (colDy < 0 && IsDy(h)) { colDy = c; continue; }
+                if (colDh < 0 && IsDh(h)) { colDh = c; continue; }
+                if (colVector < 0 && IsVector(h)) { colVector = c; continue; }
+            }
+
+            // Fallbacks by expected layout if headers were not exact
+            if (colX < 0) colX = startCol;
+            if (colY < 0) colY = startCol + 1;
+
+            if (width == 7)
+            {
+                if (colH < 0) colH = startCol + 2;
+                if (colDx < 0) colDx = startCol + 3;
+                if (colDy < 0) colDy = startCol + 4;
+                if (colDh < 0) colDh = startCol + 5;
+                if (colVector < 0) colVector = startCol + 6;
+            }
+            else // width == 5
+            {
+                colH = -1;
+                if (colDx < 0) colDx = startCol + 2;
+                if (colDy < 0) colDy = startCol + 3;
+                colDh = -1;
+                if (colVector < 0) colVector = startCol + 4;
+            }
+
+            // sanity checks
+            if (colX < 0 || colY < 0 || colDx < 0 || colDy < 0 || colVector < 0)
+                throw new InvalidOperationException("Не удалось сопоставить столбцы блока (X/Y/ΔX/ΔY/Vector).");
+
+            return (colX, colY, colH, colDx, colDy, colDh, colVector);
         }
 
         private static int FindSubHeaderRow(IXLWorksheet s, int headerRow, int idColumn)
@@ -325,9 +405,42 @@ namespace Osadka.ViewModels
                     return;
                 }
 
+
                 var sheet = wsItem.Sheet as IXLWorksheet;
+
+                // Сохраним выбор пользователя ещё до чтения
+                int pickObject = 0;
+                int pickCycle = 0;
+                try
+                {
+                    pickObject = win.SelectedObjectIndex;
+                    pickCycle = win.SelectedCycleIndex;
+                }
+                catch { /* на случай изменений окна */ }
+
                 ReadAllObjects(sheet, objList);
+
+                // Применим выбор пользователя (если он валиден)
+                if (pickObject > 0 && _objects.ContainsKey(pickObject))
+                {
+                    Header.ObjectNumber = pickObject;
+
+                    // обновим список циклов и выберем нужный, если он есть
+                    CycleNumbers.Clear();
+                    foreach (var c in _objects[pickObject].Keys.OrderBy(c => c))
+                        CycleNumbers.Add(c);
+
+                    if (CycleNumbers.Contains(pickCycle))
+                        Header.CycleNumber = pickCycle;
+                    else
+                        Header.CycleNumber = CycleNumbers.FirstOrDefault();
+
+                    RefreshData();
+                }
+
+                // Обновим кэш списков (не затирая выбранный цикл)
                 UpdateCache();
+
             }
             catch (Exception ex)
             {
@@ -335,8 +448,7 @@ namespace Osadka.ViewModels
             }
         }
 
-
-        private void ReadAllObjects(IXLWorksheet sheet, IList<object> objectItems)
+        private void ReadAllObjects(IXLWorksheet sheet, IEnumerable<object> objectItems)
         {
             _objects.Clear();
             _coordsByObject.Clear();
@@ -373,13 +485,14 @@ namespace Osadka.ViewModels
                     if (!string.IsNullOrWhiteSpace(cycLabel))
                         _cycleHeaders[cycIdx + 1] = cycLabel;
 
-                    int colX = startCol;
-                    int colY = startCol + 1;
-                    int colH = hasH ? startCol + 2 : -1;
-                    int colDx = hasH ? startCol + 3 : startCol + 2;
-                    int colDy = hasH ? startCol + 4 : startCol + 3;
-                    int colDh = hasH ? startCol + 5 : -1;
-                    int colVector = hasH ? startCol + 6 : startCol + 4;
+                    var cols = MapColumns(sheet, subHdrRow, startCol, width);
+                    int colX = cols.colX;
+                    int colY = cols.colY;
+                    int colH = cols.colH;
+                    int colDx = cols.colDx;
+                    int colDy = cols.colDy;
+                    int colDh = cols.colDh;
+                    int colVector = cols.colVector;
 
                     var rows = new List<MeasurementRow>();
                     var coordsForCycle = new List<CoordRow>();
@@ -465,7 +578,7 @@ namespace Osadka.ViewModels
             {
                 foreach (var c in cycles.Keys.OrderBy(c => c))
                     CycleNumbers.Add(c);
-                Header.CycleNumber = CycleNumbers.FirstOrDefault();
+                if (!CycleNumbers.Contains(Header.CycleNumber)) Header.CycleNumber = CycleNumbers.FirstOrDefault();
             }
 
             RefreshData();

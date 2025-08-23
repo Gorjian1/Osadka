@@ -1,12 +1,11 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Osadka.Services;
 using OxyPlot;
 using OxyPlot.Axes;
-using OxyPlot.Legends;
 using OxyPlot.Series;
 using System;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Windows;
 
@@ -21,60 +20,95 @@ namespace Osadka.ViewModels
         public IRelayCommand ExportCommand { get; }
 
         private readonly RawDataViewModel _raw;
-        private readonly DynamicsReportService _svc;
 
-        public DynamicsGrafficViewModel(RawDataViewModel raw,
-                                        DynamicsReportService svc)
+        // Сохраняем сигнатуру конструктора для DI, но сервис больше не требуется
+        public DynamicsGrafficViewModel(RawDataViewModel raw, object? _unusedService = null)
         {
             _raw = raw;
-            _svc = svc;
 
-            ExportCommand = new RelayCommand(ExportPng, () => PlotModel.Series.Any());
+            ExportCommand = new RelayCommand(ExportPng, () => PlotModel?.Series?.Any() == true);
+
+            // Любое изменение данных (цикл/объект/вставка) — перестраиваем графики
             _raw.PropertyChanged += (_, __) => Rebuild();
 
             Rebuild();
         }
+
         private void Rebuild()
         {
             Lines.Clear();
-            PlotModel = new PlotModel
+
+            var pm = new PlotModel
             {
-                Title = "Динамика осадок по маркам",
+                Title = "Динамика вектора по маркам",
                 IsLegendVisible = true,
             };
 
-            var palette = OxyPalettes.HueDistinct(20);
+            var palette = OxyPlot.OxyPalettes.HueDistinct(24);
             int colorIdx = 0;
-            var series = _svc.Build(_raw.CurrentCycles)
-                             .Select(s => new DynamicSeries
-                             {
-                                 Id = s.Id,
-                                 Points = new ObservableCollection<(int, double)>(
-                                             s.Points.Select(p => (p.Cycle, p.Mark)))
-                             });
 
-            foreach (var ds in series)
+            // Берём текущий объект: цикл -> список строк измерений
+            var cycles = _raw.CurrentCycles;
+            if (cycles != null && cycles.Count > 0)
             {
-                Lines.Add(ds);
+                // Все марки, встречающиеся в циклах
+                var ids = cycles.Values
+                                .SelectMany(rows => rows.Select(r => r.Id))
+                                .Distinct()
+                                .OrderBy(id => id);
 
-                var ls = new LineSeries
+                foreach (var id in ids)
                 {
-                    Title = ds.Id,
-                    Color = palette.Colors[colorIdx++ % palette.Colors.Count],
-                    MarkerSize = 0
-                };
+                    // Собираем точки (цикл, Vector), пропуская пустые значения
+                    var pts = cycles
+                        .OrderBy(kv => kv.Key)
+                        .Select(kv =>
+                        {
+                            var row = kv.Value.FirstOrDefault(r => r.Id == id);
+                            return (Cycle: kv.Key, Val: row?.Vector);
+                        })
+                        .Where(t => t.Val.HasValue)
+                        .Select(t => (t.Cycle, t.Val!.Value))
+                        .ToList();
 
-                foreach (var p in ds.Points.OrderBy(p => p.Item1))
-                    ls.Points.Add(new OxyPlot.DataPoint(p.Item1, p.Item2));
+                    if (pts.Count == 0)
+                        continue;
 
+                    Lines.Add(new DynamicSeries
+                    {
+                        Id = id,
+                        Points = new ObservableCollection<(int Cycle, double Value)>(pts)
+                    });
 
-                PlotModel.Series.Add(ls);
+                    var line = new LineSeries
+                    {
+                        Title = id,
+                        Color = palette.Colors[colorIdx++ % palette.Colors.Count],
+                        MarkerSize = 0
+                    };
+
+                    foreach (var p in pts)
+                        line.Points.Add(new DataPoint(p.Cycle, p.Value));
+
+                    pm.Series.Add(line);
+                }
             }
 
-            PlotModel.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "Отметка, м" });
-            PlotModel.Axes.Add(new LinearAxis { Position = AxisPosition.Bottom, Title = "Цикл №", MinimumPadding = .1 });
+            pm.Axes.Add(new LinearAxis
+            {
+                Position = AxisPosition.Left,
+                Title = "Вектор, мм"
+            });
 
-            PlotModel.InvalidatePlot(true);
+            pm.Axes.Add(new LinearAxis
+            {
+                Position = AxisPosition.Bottom,
+                Title = "Цикл №",
+                MinimumPadding = .1,
+                AbsoluteMinimum = 0
+            });
+
+            PlotModel = pm;
             ExportCommand.NotifyCanExecuteChanged();
         }
 
@@ -83,18 +117,14 @@ namespace Osadka.ViewModels
             var dlg = new Microsoft.Win32.SaveFileDialog
             {
                 Filter = "PNG|*.png",
-                FileName = $"Dynamics_{DateTime.Now:yyyyMMdd_HHmm}.png"
+                FileName = $"Dynamics_Vector_{DateTime.Now:yyyyMMdd_HHmm}.png"
             };
             if (dlg.ShowDialog() != true) return;
 
             try
             {
-                var exporter = new OxyPlot.Wpf.PngExporter
-                {
-                    Width = 1000,
-                    Height = 500,
-                };
-                using var fs = System.IO.File.Create(dlg.FileName);
+                var exporter = new OxyPlot.Wpf.PngExporter { Width = 1000, Height = 500 };
+                using var fs = File.Create(dlg.FileName);
                 exporter.Export(PlotModel, fs);
             }
             catch (Exception ex)
@@ -108,6 +138,6 @@ namespace Osadka.ViewModels
     public sealed class DynamicSeries
     {
         public string Id { get; set; } = string.Empty;
-        public ObservableCollection<(int Cycle, double Mark)> Points { get; set; } = new();
+        public ObservableCollection<(int Cycle, double Value)> Points { get; set; } = new();
     }
 }

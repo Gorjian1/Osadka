@@ -23,7 +23,6 @@ namespace Osadka.ViewModels
 
         public RawDataViewModel RawVM { get; }
         public GeneralReportViewModel GenVM { get; }
-        public RelativeSettlementsViewModel RelVM { get; }
         public DynamicsGrafficViewModel DynVM { get; }
         private readonly DynamicsReportService _dynSvc;
 
@@ -34,7 +33,6 @@ namespace Osadka.ViewModels
         public IRelayCommand SaveProjectCommand { get; }
         public IRelayCommand SaveAsProjectCommand { get; }
         public IRelayCommand QuickReportCommand { get; }
-        private CoordinateExporting? _coord;
 
         private object? _currentPage;
 
@@ -43,13 +41,6 @@ namespace Osadka.ViewModels
         {
             get => _includeGeneral;
             set => SetProperty(ref _includeGeneral, value);
-        }
-
-        private bool _includeRelative = true;
-        public bool IncludeRelative
-        {
-            get => _includeRelative;
-            set => SetProperty(ref _includeRelative, value);
         }
 
         private bool _includeGraphs = true;
@@ -69,9 +60,8 @@ namespace Osadka.ViewModels
         {
             public const string Raw = "RawData";
             public const string Diff = "SettlementDiff";
-            public const string Sum = "Summary";
             public const string Graf = "Graffics";
-            public const string Coord = "Coordinates";
+
         }
 
         public MainViewModel()
@@ -79,10 +69,10 @@ namespace Osadka.ViewModels
             RawVM = new RawDataViewModel();
 
             var genSvc = new GeneralReportService();
-            var relSvc = new RelativeReportService();
 
-            GenVM = new GeneralReportViewModel(RawVM, genSvc, relSvc); // Report пересчитывается при изменениях данных. :contentReference[oaicite:1]{index=1}
-            RelVM = new RelativeSettlementsViewModel(RawVM, relSvc);
+
+            GenVM = new GeneralReportViewModel(RawVM, genSvc); // Report пересчитывается при изменениях данных. :contentReference[oaicite:1]{index=1}
+
             _dynSvc = new DynamicsReportService();
 
             HelpCommand = new RelayCommand(OpenHelp);
@@ -118,8 +108,6 @@ namespace Osadka.ViewModels
             {
                 PageKeys.Raw => new RawDataPage(RawVM),
                 PageKeys.Diff => new GeneralReportPage(GenVM),
-                PageKeys.Sum => new RelativeSettlementsPage(RelVM),
-                PageKeys.Coord => _coord ??= new CoordinateExporting(RawVM),
                 PageKeys.Graf => new DynamicsGrafficPage(new DynamicsGrafficViewModel(RawVM, _dynSvc)),
                 _ => CurrentPage
             };
@@ -155,7 +143,6 @@ namespace Osadka.ViewModels
                 vm.CoordRows.Clear();
                 foreach (var c in data.CoordRows) vm.CoordRows.Add(c);
 
-                // --- без обращения к vm.Objects (двусмысленность). Достаём приватное поле _objects.
                 var fld = typeof(RawDataViewModel).GetField("_objects", BindingFlags.Instance | BindingFlags.NonPublic);
                 if (fld != null)
                 {
@@ -264,7 +251,7 @@ namespace Osadka.ViewModels
         {
             if (GenVM.Report is null) return;
 
-            if (!(IncludeGeneral || IncludeRelative || IncludeGraphs))
+            if (!(IncludeGeneral  || IncludeGraphs))
             {
                 MessageBox.Show("Выберите хотя бы один пункт: Общий, Относительный, Графики.",
                                 "Экспорт", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -309,9 +296,6 @@ namespace Osadka.ViewModels
                     {
                         generalWs.Delete();
                     }
-
-                    if (IncludeRelative)
-                        AddRelativeSheet(wb);
 
                     if (IncludeGraphs)
                         AddDynamicsSheet(wb);
@@ -363,110 +347,141 @@ namespace Osadka.ViewModels
             int left = 40, int top = 200, int width = 920, int height = 440,
             bool deleteOldCharts = true)
         {
-            const int xlRows = 1;
-            const int xlLine = 4;
+            const int xlRows = 1; // XlRowCol.xlRows
+            const int xlLine = 4; // XlChartType.xlLine
 
-            object app = null, wb = null, wsData = null, wsChart = null;
-            object workbooks = null, worksheets = null;
-            object listObjects = null, lo = null, loRange = null, dataBodyRange = null;
-            object chartObjects = null, chartObj = null, chart = null;
+            object app = null, wb = null, worksheets = null;
+            object wsData = null, listObjects = null, lo = null, loRange = null, dataBodyRange = null;
+            object wsChart = null, chartObjects = null, chartObj = null, chart = null, shapes = null, shape = null;
 
             try
             {
-                var excelType = System.Type.GetTypeFromProgID("Excel.Application", throwOnError: false);
-                if (excelType == null)
-                    throw new System.InvalidOperationException("На этом ПК не установлен Microsoft Excel.");
+                var excelType = Type.GetTypeFromProgID("Excel.Application", throwOnError: false);
+                if (excelType == null) throw new InvalidOperationException("Microsoft Excel не установлен.");
 
-                app = System.Activator.CreateInstance(excelType);
-                excelType.InvokeMember("Visible",
-                    System.Reflection.BindingFlags.SetProperty, null, app, new object[] { false });
-                excelType.InvokeMember("DisplayAlerts",
-                    System.Reflection.BindingFlags.SetProperty, null, app, new object[] { false });
+                app = Activator.CreateInstance(excelType);
+                excelType.InvokeMember("Visible", BindingFlags.SetProperty, null, app, new object[] { false });
+                excelType.InvokeMember("DisplayAlerts", BindingFlags.SetProperty, null, app, new object[] { false });
 
-                workbooks = excelType.InvokeMember("Workbooks",
-                    System.Reflection.BindingFlags.GetProperty, null, app, null);
-                wb = workbooks.GetType().InvokeMember("Open",
-                    System.Reflection.BindingFlags.InvokeMethod, null, workbooks, new object[] { filePath });
+                var workbooks = excelType.InvokeMember("Workbooks", BindingFlags.GetProperty, null, app, null);
+                wb = workbooks.GetType().InvokeMember("Open", BindingFlags.InvokeMethod, null, workbooks, new object[] { filePath });
 
-                worksheets = wb.GetType().InvokeMember("Worksheets",
-                    System.Reflection.BindingFlags.GetProperty, null, wb, null);
-                wsData = worksheets.GetType().InvokeMember("Item",
-                    System.Reflection.BindingFlags.GetProperty, null, worksheets, new object[] { dataSheetName });
+                worksheets = wb.GetType().InvokeMember("Worksheets", BindingFlags.GetProperty, null, wb, null);
 
-                listObjects = wsData.GetType().InvokeMember("ListObjects",
-                    System.Reflection.BindingFlags.GetProperty, null, wsData, null);
-                lo = listObjects.GetType().InvokeMember("Item",
-                    System.Reflection.BindingFlags.GetProperty, null, listObjects, new object[] { tableName });
+                // --- Данные: таблица DynTable на листе dataSheetName
+                wsData = worksheets.GetType().InvokeMember("Item", BindingFlags.GetProperty, null, worksheets, new object[] { dataSheetName });
+                listObjects = wsData.GetType().InvokeMember("ListObjects", BindingFlags.GetProperty, null, wsData, null);
+                lo = listObjects.GetType().InvokeMember("Item", BindingFlags.GetProperty, null, listObjects, new object[] { tableName });
+                dataBodyRange = lo.GetType().InvokeMember("DataBodyRange", BindingFlags.GetProperty, null, lo, null);
+                if (dataBodyRange == null) throw new InvalidOperationException("Таблица DynTable пуста (нет строк данных).");
+                loRange = lo.GetType().InvokeMember("Range", BindingFlags.GetProperty, null, lo, null);
 
-                dataBodyRange = lo.GetType().InvokeMember("DataBodyRange",
-                    System.Reflection.BindingFlags.GetProperty, null, lo, null);
-                loRange = lo.GetType().InvokeMember("Range",
-                    System.Reflection.BindingFlags.GetProperty, null, lo, null);
-
-                try
+                // --- Целевой лист для диаграмм. Гарантируем именно Worksheet (а не ChartSheet)
+                object TryGetChartSheet()
                 {
-                    wsChart = worksheets.GetType().InvokeMember("Item",
-                        System.Reflection.BindingFlags.GetProperty, null, worksheets, new object[] { chartSheetName });
+                    try { return worksheets.GetType().InvokeMember("Item", BindingFlags.GetProperty, null, worksheets, new object[] { chartSheetName }); }
+                    catch { return null; }
                 }
-                catch
+                wsChart = TryGetChartSheet();
+                bool chartSheetIsWorksheet = false;
+                if (wsChart != null)
                 {
-                    wsChart = worksheets.GetType().InvokeMember("Add",
-                        System.Reflection.BindingFlags.InvokeMethod, null, worksheets, null);
-                    wsChart.GetType().InvokeMember("Name",
-                        System.Reflection.BindingFlags.SetProperty, null, wsChart, new object[] { chartSheetName });
-                }
-
-                object missing = System.Type.Missing;
-                try
-                {
-                    chartObjects = wsChart.GetType().InvokeMember("ChartObjects",
-                        System.Reflection.BindingFlags.InvokeMethod, null, wsChart, new object[] { missing });
-                }
-                catch
-                {
-                    chartObjects = wsChart.GetType().InvokeMember("ChartObjects",
-                        System.Reflection.BindingFlags.InvokeMethod, null, wsChart, null);
-                }
-
-                if (deleteOldCharts && chartObjects != null)
-                {
+                    // у ChartSheet отсутствует ChartObjects. Если вызов падает — это ChartSheet.
                     try
                     {
-                        chartObjects.GetType().InvokeMember("Delete",
-                            System.Reflection.BindingFlags.InvokeMethod, null, chartObjects, null);
+                        _ = wsChart.GetType().InvokeMember("ChartObjects", BindingFlags.InvokeMethod, null, wsChart, null);
+                        chartSheetIsWorksheet = true;
                     }
-                    catch { /* ignore */ }
+                    catch { chartSheetIsWorksheet = false; }
+                }
+                if (wsChart == null || !chartSheetIsWorksheet)
+                {
+                    wsChart = worksheets.GetType().InvokeMember("Add", BindingFlags.InvokeMethod, null, worksheets, null);
+                    wsChart.GetType().InvokeMember("Name", BindingFlags.SetProperty, null, wsChart, new object[] { chartSheetName });
                 }
 
-                chartObj = chartObjects.GetType().InvokeMember("Add",
-                    System.Reflection.BindingFlags.InvokeMethod, null, chartObjects,
-                    new object[] { left, top, width, height });
-                chart = chartObj.GetType().InvokeMember("Chart",
-                    System.Reflection.BindingFlags.GetProperty, null, chartObj, null);
+                // Активируем лист — без этого Add/Shapes могут падать на некоторых сборках Excel
+                try { wsChart.GetType().InvokeMember("Activate", BindingFlags.InvokeMethod, null, wsChart, null); } catch { }
+                try { wsChart.GetType().InvokeMember("Select", BindingFlags.InvokeMethod, null, wsChart, new object[] { true }); } catch { }
 
-                chart.GetType().InvokeMember("SetSourceData",
-                    System.Reflection.BindingFlags.InvokeMethod, null, chart, new object[] { loRange, xlRows });
-                chart.GetType().InvokeMember("ChartType",
-                    System.Reflection.BindingFlags.SetProperty, null, chart, new object[] { xlLine });
-                chart.GetType().InvokeMember("HasTitle",
-                    System.Reflection.BindingFlags.SetProperty, null, chart, new object[] { false });
+                // Удаляем старые диаграммы (если есть)
+                object missing = Type.Missing;
+                try
+                {
+                    chartObjects = wsChart.GetType().InvokeMember("ChartObjects", BindingFlags.InvokeMethod, null, wsChart, new object[] { missing });
+                    if (deleteOldCharts && chartObjects != null)
+                    {
+                        try
+                        {
+                            // быстрый путь — Delete у всей коллекции
+                            chartObjects.GetType().InvokeMember("Delete", BindingFlags.InvokeMethod, null, chartObjects, null);
+                        }
+                        catch
+                        {
+                            // совместимый путь — по одному
+                            var cntObj = chartObjects.GetType().InvokeMember("Count", BindingFlags.GetProperty, null, chartObjects, null);
+                            int cnt = cntObj is int i ? i : Convert.ToInt32(cntObj);
+                            for (int j = cnt; j >= 1; j--)
+                            {
+                                var co = chartObjects.GetType().InvokeMember("Item", BindingFlags.GetProperty, null, chartObjects, new object[] { j });
+                                try { co.GetType().InvokeMember("Delete", BindingFlags.InvokeMethod, null, co, null); } catch { }
+                                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(co);
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    chartObjects = null; // если это всё же ChartSheet — колл. не будет
+                }
 
-                wb.GetType().InvokeMember("Save", System.Reflection.BindingFlags.InvokeMethod, null, wb, null);
+                // --- Создание диаграммы: сначала Shapes.AddChart2, затем fallback на ChartObjects.Add
+                bool created = false;
+                try
+                {
+                    shapes = wsChart.GetType().InvokeMember("Shapes", BindingFlags.GetProperty, null, wsChart, null);
+                    // AddChart2(Style, XlChartType, Left, Top, Width, Height)
+                    shape = shapes.GetType().InvokeMember("AddChart2", BindingFlags.InvokeMethod, null, shapes,
+                            new object[] { 0, xlLine, (double)left, (double)top, (double)width, (double)height });
+                    chart = shape.GetType().InvokeMember("Chart", BindingFlags.GetProperty, null, shape, null);
+                    created = chart != null;
+                }
+                catch
+                {
+                    // Fallback: ChartObjects.Add
+                    if (chartObjects == null)
+                        chartObjects = wsChart.GetType().InvokeMember("ChartObjects", BindingFlags.InvokeMethod, null, wsChart, new object[] { missing });
+
+                    chartObj = chartObjects.GetType().InvokeMember("Add", BindingFlags.InvokeMethod, null, chartObjects,
+                        new object[] { (double)left, (double)top, (double)width, (double)height });
+                    chart = chartObj.GetType().InvokeMember("Chart", BindingFlags.GetProperty, null, chartObj, null);
+                    created = chart != null;
+                }
+
+                if (!created) throw new InvalidOperationException("Не удалось создать объект диаграммы на листе.");
+
+                // Источник данных — вся таблица (заголовки в первой строке), серии по строкам
+                chart.GetType().InvokeMember("SetSourceData", BindingFlags.InvokeMethod, null, chart, new object[] { loRange, xlRows });
+                chart.GetType().InvokeMember("ChartType", BindingFlags.SetProperty, null, chart, new object[] { xlLine });
+                chart.GetType().InvokeMember("HasTitle", BindingFlags.SetProperty, null, chart, new object[] { false });
+
+                wb.GetType().InvokeMember("Save", BindingFlags.InvokeMethod, null, wb, null);
             }
             finally
             {
-                try { wb?.GetType().InvokeMember("Close", System.Reflection.BindingFlags.InvokeMethod, null, wb, new object[] { false }); } catch { }
-                try { app?.GetType().InvokeMember("Quit", System.Reflection.BindingFlags.InvokeMethod, null, app, null); } catch { }
+                try { wb?.GetType().InvokeMember("Close", BindingFlags.InvokeMethod, null, wb, new object[] { false }); } catch { }
+                try { app?.GetType().InvokeMember("Quit", BindingFlags.InvokeMethod, null, app, null); } catch { }
 
-                void rel(object o) { if (o != null) Marshal.FinalReleaseComObject(o); }
-                rel(chart); rel(chartObj); rel(chartObjects);
+                void rel(object o) { if (o != null) System.Runtime.InteropServices.Marshal.FinalReleaseComObject(o); }
+                rel(chart); rel(chartObj); rel(chartObjects); rel(shape); rel(shapes);
                 rel(wsChart); rel(loRange); rel(dataBodyRange); rel(lo); rel(listObjects);
-                rel(wsData); rel(worksheets); rel(wb); rel(workbooks); rel(app);
+                rel(wsData); rel(worksheets); rel(wb);
 
-                System.GC.Collect(); System.GC.WaitForPendingFinalizers();
-                System.GC.Collect(); System.GC.WaitForPendingFinalizers();
+                GC.Collect(); GC.WaitForPendingFinalizers();
+                GC.Collect(); GC.WaitForPendingFinalizers();
             }
         }
+
 
         // ---------- Плейсхолдеры под новый общий отчёт (экстремумы) с безопасной рефлексией ----------
         private Dictionary<string, string> BuildPlaceholderMap()
@@ -551,70 +566,6 @@ namespace Osadka.ViewModels
             return map;
         }
 
-
-        private void AddRelativeSheet(XLWorkbook wb)
-        {
-            var ws = wb.AddWorksheet("Относительная разность");
-            ws.Cell(1, 1).Value = "Точка №1";
-            ws.Cell(1, 2).Value = "Точка №2";
-            ws.Cell(1, 3).Value = "Расстояние";
-            ws.Cell(1, 4).Value = "Высотная разность";
-            ws.Cell(1, 5).Value = "Относительная";
-            ws.Cell(1, 6).Value = "Максимально допустимый предел";
-
-            // НЕ завязано на RelVM.Rows (у тебя его нет).
-            var relSvc = new RelativeReportService();
-            double spLim = RawVM.Header.RelNomen ?? 0;
-            double calcLim = RawVM.Header.RelCalculated ?? 0;
-            var relResult = relSvc.Build(RawVM.CoordRows, RawVM.DataRows, spLim, calcLim);
-
-            // Достаём relResult.Rows через рефлексию
-            var rowsProp = relResult.GetType().GetProperty("Rows");
-            var rowsObj = rowsProp?.GetValue(relResult) as IEnumerable;
-            int r = 2;
-
-            if (rowsObj != null)
-            {
-                foreach (var row in rowsObj)
-                {
-                    // ожидаемые имена свойств строки
-                    string id1 = GetProp(row, "Id1") ?? "";
-                    string id2 = GetProp(row, "Id2") ?? "";
-                    double? dist = GetPropD(row, "Distance");
-                    double? dh = GetPropD(row, "Dh");
-                    double? rel = GetPropD(row, "Relative");
-                    double? max = GetPropD(row, "Max");
-
-                    ws.Cell(r, 1).Value = id1;
-                    ws.Cell(r, 2).Value = id2;
-                    ws.Cell(r, 3).Value = dist ?? 0;
-                    ws.Cell(r, 4).Value = dh ?? 0;
-                    ws.Cell(r, 5).Value = rel ?? 0;
-                    ws.Cell(r, 6).Value = max ?? 0;
-                    r++;
-                }
-            }
-
-            ws.Columns().AdjustToContents();
-
-            static string? GetProp(object obj, string name)
-                => obj.GetType().GetProperty(name)?.GetValue(obj)?.ToString();
-
-            static double? GetPropD(object obj, string name)
-            {
-                var p = obj.GetType().GetProperty(name);
-                if (p == null) return null;
-                var v = p.GetValue(obj);
-                if (v is double d) return d;
-                if (v is float f) return (double)f;
-                if (v is decimal m) return (double)m;
-                if (v is int i) return i;
-                if (v is long l) return l;
-                if (v is string s && double.TryParse(s, out var ds)) return ds;
-                return null;
-            }
-        }
-
         private void AddDynamicsSheet(XLWorkbook wb)
         {
             const string sheetName = "Графики динамики";
@@ -654,15 +605,17 @@ namespace Osadka.ViewModels
                 foreach (var pt in ser.Points)
                 {
                     if (!colByCycle.TryGetValue(pt.Cycle, out int col)) continue;
-                    ws.Cell(rr, col).Value = pt.Mark;
+                    // было: ws.Cell(rr, col).Value = pt.Vector;
+                    ws.Cell(rr, col).Value = pt.Value;   // <-- берём значение вектора
                 }
                 rr++;
             }
 
+
             var lastCol = 1 + cycles.Count;
             var rng = ws.Range(1, 1, rr - 1, lastCol);
-            var existingTable = ws.Tables.FirstOrDefault(t =>
-                string.Equals(t.Name, tableName, StringComparison.OrdinalIgnoreCase));
+var existingTable = ws.Tables.FirstOrDefault(t =>
+    string.Equals(t.Name, tableName, StringComparison.OrdinalIgnoreCase));
 
             if (existingTable != null)
             {

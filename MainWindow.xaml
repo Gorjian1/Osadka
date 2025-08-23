@@ -123,9 +123,7 @@
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,10,0,1">
                         <CheckBox Content="Общий"
                   IsChecked="{Binding IncludeGeneral, Mode=TwoWay}"
-                  Margin="0,0,16,0"/>
-                        <CheckBox Content="Отн."
-                  IsChecked="{Binding IncludeRelative, Mode=TwoWay}"
+
                   Margin="0,0,16,0"/>
                         <CheckBox Content="Графики"
                   IsChecked="{Binding IncludeGraphs, Mode=TwoWay}"/>
@@ -142,15 +140,10 @@
                               GroupName="nav" Command="{Binding NavigateCommand}" CommandParameter="RawData" Height="30"/>
                 <RadioButton Style="{StaticResource NavToggle}" Content="📄 Общий отчёт "
                               GroupName="nav" Command="{Binding NavigateCommand}" CommandParameter="SettlementDiff" Height="30"/>
-                <RadioButton Style="{StaticResource NavToggle}" Content="📄 Отчёт разности осадок "
-                              GroupName="nav" Command="{Binding NavigateCommand}" CommandParameter="Summary" Height="30"/>
-                <RadioButton Style="{StaticResource NavToggle}" Content="📈 Динамика общей осадки "
+                
+                <RadioButton Style="{StaticResource NavToggle}" Content="📈 Динамика Вектора "
                               GroupName="nav" Command="{Binding NavigateCommand}" CommandParameter="Graffics" Height="30"/>
-                <Separator Margin="10,7" />
-                <TextBlock Text="Дополнительно" HorizontalAlignment="Center" FontWeight="Light" Margin="10,0,0,0" FontSize="16"/>
-
-                <RadioButton Style="{StaticResource NavToggle}" Content="🗺️ Открыть чертёж (координаты)"
-              GroupName="nav" Command="{Binding NavigateCommand}" CommandParameter="Coordinates" Height="30"/>
+              
             </StackPanel>
         </Border>
 
