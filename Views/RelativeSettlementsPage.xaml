@@ -1,0 +1,61 @@
+﻿<UserControl
+    x:Class="Osadka.Views.RelativeSettlementsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    d:DesignHeight="400" d:DesignWidth="600">
+
+    <DockPanel>
+        <ToolBar DockPanel.Dock="Top" Background="#F9FBFD">>
+            <Button Content="🔢 Пересчитать" Command="{Binding RecalcCommand}"/>
+        </ToolBar>
+
+        <DataGrid ItemsSource="{Binding AllRows}"
+              AutoGenerateColumns="False"
+              CanUserAddRows="False"
+              Margin="40,4,110,0" Height="1000" Width="290" >
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="№1"    Binding="{Binding Id1}"/>
+                <DataGridTextColumn Header="№2"    Binding="{Binding Id2}"/>
+                <DataGridTextColumn Header="Dist, мм" Binding="{Binding Distance, StringFormat={}{0:F2}}"/>
+                <DataGridTextColumn Header="ΔS, мм"  Binding="{Binding DeltaTotal, StringFormat={}{0:F1}}"/>
+                <DataGridTextColumn Header="ΔS/Dist" Binding="{Binding Ratio,      StringFormat={}{0:F4}}"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <TextBlock Text="Превышения SP:" FontWeight="Bold" Margin="8,12,0,0"/>
+        <ItemsControl ItemsSource="{Binding ExceededSpRows}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock>
+                        <TextBlock.Text>
+                            <MultiBinding StringFormat="{}{0}-{1}">
+                                <Binding Path="Id1"/>
+                                <Binding Path="Id2"/>
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <TextBlock Text="Превышения Calc:" FontWeight="Bold" Margin="8,12,0,0"/>
+        <ItemsControl ItemsSource="{Binding ExceededCalcRows}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock>
+                        <TextBlock.Text>
+                            <MultiBinding StringFormat="{}{0}-{1}">
+                                <Binding Path="Id1"/>
+                                <Binding Path="Id2"/>
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+    </DockPanel>
+</UserControl>
