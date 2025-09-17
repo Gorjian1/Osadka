@@ -1,11 +1,13 @@
 ﻿using Osadka.ViewModels;
 using System;
+using System.ComponentModel;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using System.Collections.Specialized;
 
 namespace Osadka.Views
 {
@@ -16,9 +18,38 @@ namespace Osadka.Views
             InitializeComponent();
             DataContext = vm;
 
+            // Синхронизация порядка в комбобоксах тулбара:
+            //   Объекты — по возрастанию
+            //   Циклы   — по убыванию (правый = самый поздний)
+            SetupToolbarSorting(vm);
+
             // Коммит активного TextBox на Enter/клик — пусть остаётся, это не мешает
             AddHandler(Keyboard.PreviewKeyDownEvent, new KeyEventHandler(CommitOnEnter), true);
             AddHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler(CommitOnMouseDown), true);
+        }
+
+        private void SetupToolbarSorting(RawDataViewModel vm)
+        {
+            // ObjectNumbers — ObservableCollection<int>
+            var viewObjects = CollectionViewSource.GetDefaultView(vm.ObjectNumbers);
+            if (viewObjects != null)
+            {
+                viewObjects.SortDescriptions.Clear();
+                // Пустое имя свойства — сортировка по самому элементу (int)
+                viewObjects.SortDescriptions.Add(new SortDescription(string.Empty, ListSortDirection.Ascending));
+            }
+
+            // CycleNumbers — ObservableCollection<int>
+            var viewCycles = CollectionViewSource.GetDefaultView(vm.CycleNumbers);
+            if (viewCycles != null)
+            {
+                viewCycles.SortDescriptions.Clear();
+                viewCycles.SortDescriptions.Add(new SortDescription(string.Empty, ListSortDirection.Descending));
+            }
+
+            // На случай динамических изменений коллекций — обновляем вьюхи при изменениях
+            vm.ObjectNumbers.CollectionChanged += (_, __) => viewObjects?.Refresh();
+            vm.CycleNumbers.CollectionChanged += (_, __) => viewCycles?.Refresh();
         }
 
         // Разрешаем: пусто | "-" | "-12" | "12" | "12." | "12.3" | ".5" | ",5"

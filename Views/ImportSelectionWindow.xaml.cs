@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -16,126 +17,331 @@ namespace Osadka.Views
             DataContext = new ImportSelectionVM(wb);
         }
 
-        private void OkClick(object sender, RoutedEventArgs e)
+        private void OkClick(object? sender, RoutedEventArgs e)
         {
-            var vm = (ImportSelectionVM)DataContext;
-            if (!vm.IsValid)
-            {
-                MessageBox.Show("Выберите лист, объект и цикл.", "Выбор", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
             DialogResult = true;
+            Close();
         }
 
-        public IXLWorksheet SelectedWorksheet => ((ImportSelectionVM)DataContext).SelectedWorksheet?.Sheet!;
-        public int SelectedObjectIndex => ((ImportSelectionVM)DataContext).SelectedObject?.Index ?? 0;
-        public int SelectedCycleIndex => ((ImportSelectionVM)DataContext).SelectedCycle?.Index ?? 0;
-        public List<(int Row, IXLCell Cell)> ObjectHeaders => ((ImportSelectionVM)DataContext).CurrentObjectHeaders;
-        public List<int> CycleStarts => ((ImportSelectionVM)DataContext).CurrentCycleStarts;
+        // === Публичные геттеры для RawDataViewModel ===
+        public WorksheetItem? SelectedWorksheet => (DataContext as ImportSelectionVM)?.SelectedWorksheet;
+        public List<(int Row, IXLCell Cell)> ObjectHeaders => (DataContext as ImportSelectionVM)?.ObjectHeaders ?? new();
+        public List<int> CycleStarts => (DataContext as ImportSelectionVM)?.CycleStarts ?? new();
+        public int SelectedObjectIndex => (DataContext as ImportSelectionVM)?.SelectedObjectIndex ?? 1; // 1-based
+        public int SelectedCycleIndex => (DataContext as ImportSelectionVM)?.SelectedCycleIndex ?? 1; // 1-based
     }
 
-    public partial class ImportSelectionVM : ObservableObject
+    public class ImportSelectionVM : ObservableObject
     {
         private readonly XLWorkbook _wb;
+
+        public List<WorksheetItem> Worksheets { get; } = new();
+
+        private WorksheetItem? _selectedWorksheet;
+        public WorksheetItem? SelectedWorksheet
+        {
+            get => _selectedWorksheet;
+            set
+            {
+                if (SetProperty(ref _selectedWorksheet, value))
+                {
+                    LoadObjects();
+                }
+            }
+        }
+
+        public List<ObjectItem> Objects { get; private set; } = new();
+
+        private ObjectItem? _selectedObject;
+        public ObjectItem? SelectedObject
+        {
+            get => _selectedObject;
+            set
+            {
+                if (SetProperty(ref _selectedObject, value))
+                {
+                    LoadCycles();
+                }
+            }
+        }
+
+        public List<CycleItem> Cycles { get; private set; } = new();
+
+        private CycleItem? _selectedCycle;
+        public CycleItem? SelectedCycle
+        {
+            get => _selectedCycle;
+            set => SetProperty(ref _selectedCycle, value);
+        }
+
+        // Для передачи обратно во VM
+        public List<(int Row, IXLCell Cell)> ObjectHeaders { get; private set; } = new();
+        public List<int> CycleStarts { get; private set; } = new();
+
+        // Выдаём индексы 1-based (как ожидает внутренняя нумерация слева-направо)
+        public int SelectedObjectIndex => SelectedObject?.Index ?? 1;
+        public int SelectedCycleIndex => SelectedCycle?.Index ?? 1;
+
         public ImportSelectionVM(XLWorkbook wb)
         {
             _wb = wb;
-            Worksheets = _wb.Worksheets.Select((w, i) => new WorksheetItem { Index = i + 1, Name = w.Name, Sheet = w }).ToList();
+
+            var preferred = wb.Worksheets
+                              .Select((s, i) => new WorksheetItem
+                              {
+                                  Index = i + 1,
+                                  Name = s.Name,
+                                  Sheet = s
+                              })
+                              .OrderByDescending(w => Regex.IsMatch(w.Name, "окруж", RegexOptions.IgnoreCase) ? 1 : 0)
+                              .ThenBy(w => w.Index)
+                              .ToList();
+
+            Worksheets.AddRange(preferred);
             SelectedWorksheet = Worksheets.FirstOrDefault();
         }
 
-        public List<WorksheetItem> Worksheets { get; }
-        [ObservableProperty] private WorksheetItem? selectedWorksheet;
-        partial void OnSelectedWorksheetChanged(WorksheetItem? value) => LoadObjects();
-
-        public List<ObjectItem> Objects { get; private set; } = new();
-        [ObservableProperty] private ObjectItem? selectedObject;
-        partial void OnSelectedObjectChanged(ObjectItem? value) => LoadCycles();
-
-        public List<CycleItem> Cycles { get; private set; } = new();
-        [ObservableProperty] private CycleItem? selectedCycle;
-
-        public bool IsValid => SelectedWorksheet != null && SelectedObject != null && SelectedCycle != null;
-
-        public List<(int Row, IXLCell Cell)> CurrentObjectHeaders { get; private set; } = new();
-        public List<int> CurrentCycleStarts { get; private set; } = new();
-
         private void LoadObjects()
         {
-            Objects.Clear();
-            Cycles.Clear();
+            Objects = new();
+            ObjectHeaders = new();
             SelectedObject = null;
+            Cycles = new();
             SelectedCycle = null;
-            CurrentObjectHeaders = new();
-            CurrentCycleStarts = new();
+            CycleStarts = new();
 
             if (SelectedWorksheet == null) return;
 
             var ws = SelectedWorksheet.Sheet;
 
-            CurrentObjectHeaders = FindObjectHeaders(ws);
-            Objects = CurrentObjectHeaders
-                .Select((h, i) => new ObjectItem
+            ObjectHeaders = FindObjectHeadersV2(ws);
+
+            var list = ObjectHeaders
+                .Select((hdr, i) =>
                 {
-                    Index = i + 1,
-                    HeaderRow = h.Row,
-                    IdColumn = h.Cell.Address.ColumnNumber
+                    int leftCol = hdr.Cell.Address.ColumnNumber;
+                    int rightCol = FindRightIdColumnInRow(ws, hdr.Row);
+                    int firstDataRow = FindSubHeaderRow(ws, hdr.Row, leftCol) + 1;
+                    int countRows = CountNumericRows(ws, firstDataRow, leftCol, rightCol);
+
+                    return new ObjectItem
+                    {
+                        Index = i + 1,
+                        HeaderRow = hdr.Row,
+                        IdLeftColumn = leftCol,
+                        IdRightColumn = rightCol,
+                        RowsCountHint = countRows
+                    };
                 })
                 .ToList();
 
+            Objects = list;
             OnPropertyChanged(nameof(Objects));
             SelectedObject = Objects.FirstOrDefault();
         }
 
         private void LoadCycles()
         {
-            Cycles.Clear();
+            Cycles = new();
             SelectedCycle = null;
-            CurrentCycleStarts = new();
+            CycleStarts = new();
+
             if (SelectedWorksheet == null || SelectedObject == null) return;
 
             var ws = SelectedWorksheet.Sheet;
-            int subHeaderRow = SelectedObject.HeaderRow + 1;
-            CurrentCycleStarts = FindCycleStarts(ws, subHeaderRow, SelectedObject.IdColumn);
+            int headerRow = SelectedObject.HeaderRow;
+            int idColLeft = SelectedObject.IdLeftColumn;
 
-            var cyclesAsc = CurrentCycleStarts
-                               .OrderBy(c => c) 
-                               .Select((c, i) => new CycleItem { Index = i + 1, StartColumn = c })
-                               .ToList();
+            int subHeaderRow = FindSubHeaderRow(ws, headerRow, idColLeft);
+            var starts = FindCycleStartsV2(ws, headerRow, subHeaderRow, idColLeft); // ASC по колонке
+
+            // порядок = как в ComboBox (правый цикл первый)
+            CycleStarts = starts
+                .OrderByDescending(s => s.StartColumn)
+                .Select(s => s.StartColumn)
+                .ToList();
 
 
-            Cycles = cyclesAsc
-                        .OrderByDescending(ci => ci.StartColumn)
-                        .ToList();
+            // Внутренняя нумерация — слева-направо (ASC)
+            var ordinalByCol = starts
+                .Select((s, idx) => (s.StartColumn, Ordinal: idx + 1))
+                .ToDictionary(x => x.StartColumn, x => x.Ordinal);
+
+            // Отображение пользователю — справа-налево (часто самый правый — последний цикл)
+            Cycles = starts
+                .OrderByDescending(c => c.StartColumn)
+                .Select(s => new CycleItem
+                {
+                    Index = ordinalByCol[s.StartColumn], // ВАЖНО: внутренний индекс!
+                    StartColumn = s.StartColumn,
+                    Label = string.IsNullOrWhiteSpace(s.Label) ? $"Цикл {ordinalByCol[s.StartColumn]}" : s.Label
+                })
+                .ToList();
+
             OnPropertyChanged(nameof(Cycles));
             SelectedCycle = Cycles.FirstOrDefault();
         }
 
-        private static List<(int Row, IXLCell Cell)> FindObjectHeaders(IXLWorksheet sheet) =>
-            sheet.RangeUsed()
-                 .Rows()
-                 .Select(r => (Row: r.RowNumber(),
-                               Cell: r.Cells().FirstOrDefault(c =>
-                                      Regex.IsMatch(c.GetString(),
-                                                    @"^\s*№\s*мар", RegexOptions.IgnoreCase))))
-                 .Where(t => t.Cell != null)
-                 .ToList();
+        // === Поиск заголовка «№ точки/№ марки» слева и справа ===
+        private static List<(int Row, IXLCell Cell)> FindObjectHeadersV2(IXLWorksheet sheet)
+        {
+            var list = new List<(int Row, IXLCell Cell)>();
+            var used = sheet.RangeUsed();
+            if (used == null) return list;
 
-        private static List<int> FindCycleStarts(IXLWorksheet sheet, int subHdrRow, int idColumn) =>
-            sheet.Row(subHdrRow)
-                 .Cells()
-                 .Where(c => c.GetString().Trim()
-                              .StartsWith("Отметка", StringComparison.OrdinalIgnoreCase))
-                 .Select(c => c.Address.ColumnNumber)
-                 .Where(col => col != idColumn)
-                 .ToList();
+            foreach (var row in used.Rows())
+            {
+                var candidates = row.Cells()
+                    .Where(c =>
+                    {
+                        var s = c.GetString();
+                        return Regex.IsMatch(s, @"^\s*№\s*(точки|мар\w*)", RegexOptions.IgnoreCase);
+                    })
+                    .ToList();
+
+                if (candidates.Count >= 1)
+                {
+                    var leftMost = candidates.OrderBy(c => c.Address.ColumnNumber).First();
+                    list.Add((row.RowNumber(), leftMost));
+                }
+            }
+            return list;
+        }
+
+        private static int FindRightIdColumnInRow(IXLWorksheet sheet, int headerRow)
+        {
+            var row = sheet.Row(headerRow);
+            var right = row.Cells()
+                .Where(c => Regex.IsMatch(c.GetString(), @"^\s*№\s*(точки|мар\w*)", RegexOptions.IgnoreCase))
+                .OrderByDescending(c => c.Address.ColumnNumber)
+                .FirstOrDefault();
+            return right?.Address.ColumnNumber ?? FindFallbackRight(sheet, headerRow);
+        }
+
+        private static int FindFallbackRight(IXLWorksheet sheet, int headerRow)
+        {
+            var used = sheet.RangeUsed();
+            int maxCol = used?.RangeAddress.LastAddress.ColumnNumber ?? sheet.LastColumnUsed().ColumnNumber();
+            return maxCol;
+        }
+
+        private static int FindSubHeaderRow(IXLWorksheet sheet, int headerRow, int idColLeft)
+        {
+            int last = sheet.LastRowUsed().RowNumber();
+            for (int r = headerRow + 1; r <= Math.Min(headerRow + 6, last); r++)
+            {
+                bool anyOtm = sheet.Row(r).Cells()
+                    .Any(c => c.Address.ColumnNumber != idColLeft &&
+                              c.GetString().Trim().StartsWith("Отметка", StringComparison.OrdinalIgnoreCase));
+                if (anyOtm) return r;
+            }
+            return headerRow + 1;
+        }
+
+        private static int CountNumericRows(IXLWorksheet sheet, int startRow, int idColLeft, int idColRight)
+        {
+            int last = sheet.LastRowUsed().RowNumber();
+            int count = 0, blanks = 0;
+
+            for (int r = startRow; r <= last; r++)
+            {
+                var l = sheet.Cell(r, idColLeft).GetString().Trim();
+                var rr = idColRight > 0 ? sheet.Cell(r, idColRight).GetString().Trim() : null;
+
+                bool bothEmpty = string.IsNullOrEmpty(l) && string.IsNullOrEmpty(rr);
+                if (bothEmpty)
+                {
+                    blanks++;
+                    if (blanks >= 3) break;
+                    continue;
+                }
+                blanks = 0;
+
+                if (int.TryParse(l, out _) && (rr == null || rr == l || int.TryParse(rr, out _)))
+                    count++;
+                else if (Regex.IsMatch(l, @"^\s*Продолжение", RegexOptions.IgnoreCase))
+                    break;
+            }
+            return count;
+        }
+
+        private static List<(int StartColumn, string Label)> FindCycleStartsV2(IXLWorksheet sheet, int headerRow, int subHeaderRow, int idColLeft)
+        {
+            var starts = new List<(int StartColumn, string Label)>();
+
+            var headerCells = sheet.Row(headerRow).Cells().ToList();
+            var cycleHeaderCells = headerCells
+                .Where(c => Regex.IsMatch(c.GetString(), @"Цикл\s*№", RegexOptions.IgnoreCase))
+                .ToList();
+
+            foreach (var hc in cycleHeaderCells)
+            {
+                int candidateCol = FindNearestOtmColumnOnOrRight(sheet, subHeaderRow, hc.Address.ColumnNumber, idColLeft);
+                if (candidateCol > 0)
+                    starts.Add((candidateCol, hc.GetString().Trim()));
+            }
+
+            var otmCols = sheet.Row(subHeaderRow).Cells()
+                .Where(c => c.Address.ColumnNumber != idColLeft &&
+                            c.GetString().Trim().StartsWith("Отметка", StringComparison.OrdinalIgnoreCase))
+                .Select(c => c.Address.ColumnNumber)
+                .ToList();
+
+            foreach (var col in otmCols)
+            {
+                if (!starts.Any(s => s.StartColumn == col))
+                {
+                    string label = FindCycleLabelNear(sheet, headerRow, col);
+                    starts.Add((col, label));
+                }
+            }
+
+            return starts
+                .GroupBy(s => s.StartColumn)
+                .Select(g => g.First())
+                .OrderBy(s => s.StartColumn) // ASC — внутренняя нумерация
+                .ToList();
+        }
+
+        private static int FindNearestOtmColumnOnOrRight(IXLWorksheet sheet, int subHeaderRow, int fromColumn, int idColLeft)
+        {
+            int lastCol = sheet.LastColumnUsed().ColumnNumber();
+            for (int c = fromColumn; c <= lastCol; c++)
+            {
+                if (c == idColLeft) continue;
+                var s = sheet.Cell(subHeaderRow, c).GetString().Trim();
+                if (s.StartsWith("Отметка", StringComparison.OrdinalIgnoreCase))
+                    return c;
+            }
+            for (int c = fromColumn - 1; c >= 1 && c >= fromColumn - 3; c--)
+            {
+                if (c == idColLeft) continue;
+                var s = sheet.Cell(subHeaderRow, c).GetString().Trim();
+                if (s.StartsWith("Отметка", StringComparison.OrdinalIgnoreCase))
+                    return c;
+            }
+            return 0;
+        }
+
+        private static string FindCycleLabelNear(IXLWorksheet sheet, int headerRow, int aroundColumn)
+        {
+            for (int dc = -2; dc <= 2; dc++)
+            {
+                int c = aroundColumn + dc;
+                if (c <= 0) continue;
+                var s = sheet.Cell(headerRow, c).GetString();
+                if (Regex.IsMatch(s, @"Цикл\s*№", RegexOptions.IgnoreCase))
+                    return s.Trim();
+            }
+            return string.Empty;
+        }
     }
 
     public class WorksheetItem
     {
         public int Index { get; set; }
-        public string Name { get; set; } = "";
-        public IXLWorksheet Sheet { get; set; } = default!;
+        public string Name { get; set; } = string.Empty;
+        public IXLWorksheet Sheet { get; set; } = null!;
         public string Display => $"{Index}. {Name}";
     }
 
@@ -143,14 +349,21 @@ namespace Osadka.Views
     {
         public int Index { get; set; }
         public int HeaderRow { get; set; }
-        public int IdColumn { get; set; }
-        public string Display => $"{Index}";
+        public int IdLeftColumn { get; set; }
+        public int IdRightColumn { get; set; }
+        public int RowsCountHint { get; set; }
+        public string Display => RowsCountHint > 0
+            ? $"{Index}"
+            : $"{Index}";
     }
 
-    public class CycleItem
+    public class CycleItem : INotifyPropertyChanged
     {
-        public int Index { get; set; }
-        public int StartColumn { get; set; }
-        public string Display => $"{Index}";
+        public int Index { get; set; }          // внутренний индекс цикла (слева-направо)
+        public int StartColumn { get; set; }    // Excel-колонка начала тройки
+        public string Label { get; set; } = string.Empty;
+        public string Display => string.IsNullOrWhiteSpace(Label) ? $"{Index}" : Label;
+
+        public event PropertyChangedEventHandler? PropertyChanged;
     }
 }

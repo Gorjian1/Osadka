@@ -7,6 +7,7 @@ public partial class CoordRow : ObservableObject, IDataErrorInfo
 {
     [ObservableProperty] private double _X;
     [ObservableProperty] private double _Y;
+    [ObservableProperty] private string _id;
 
     public string Error => null!;
 

@@ -543,7 +543,6 @@ namespace Osadka.ViewModels
                 return arr.Length > 0 ? string.Join(", ", arr) : "-";
             }
 
-            // Приводит все числа в строке к формату с 1 знаком после запятой с учётом текущей культуры
             static string FormatNumbersToOne(string? s)
             {
                 if (string.IsNullOrWhiteSpace(s)) return s ?? "-";
@@ -572,7 +571,6 @@ namespace Osadka.ViewModels
 
                 ["/общэкстр"] = DashIfEmpty(FormatNumbersToOne(r.TotalExtrema)),
                 ["/сеттэкстр"] = DashIfEmpty(FormatNumbersToOne(r.SettlExtrema)),
-
                 ["/общэкстрId"] = DashIfEmpty(r.TotalExtremaIds),
                 ["/сеттэкстрId"] = DashIfEmpty(r.SettlExtremaIds),
 
@@ -591,10 +589,24 @@ namespace Osadka.ViewModels
                 ["/отн>расч"] = DashIfEmpty(GenVM.ExceedRelCalcDisplay),
             };
 
+            // Алиасы старых тегов
             map["/общмин"] = map["/общэкстр"];
             map["/сеттмин"] = map["/сеттэкстр"];
             map["/общминId"] = map["/общэкстрId"];
             map["/сеттминId"] = map["/сеттэкстрId"];
+
+            // === НОВОЕ: читаем максимум относительной разницы из бизнес-логики Relative ===
+            var mr = RelVM?.Report?.MaxRelative;
+            if (mr is { } && !double.IsNaN(mr.Value))
+            {
+                map["/отнмакс"] = mr.Value.ToString("F5", CultureInfo.CurrentCulture);
+                map["/отнмаксId"] = JoinOrDash(mr.Ids);
+            }
+            else
+            {
+                map["/отнмакс"] = "-";
+                map["/отнмаксId"] = "-";
+            }
 
             return map;
         }

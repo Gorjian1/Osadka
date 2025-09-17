@@ -264,6 +264,8 @@
                         <Run Text="/сеттмакс"/><LineBreak/>
                         <Run Text="/сеттмаксId"/><LineBreak/>
                         <Run Text="/сеттср"/><LineBreak/>
+                        <Run Text="/отнмакс"/><LineBreak/>
+                        <Run Text="/отнмаксId"/><LineBreak/>
                         <Run Text="/нетдоступа"/><LineBreak/>
                         <Run Text="/уничтожены"/><LineBreak/>
                         <Run Text="/новые"/><LineBreak/>
@@ -295,16 +297,20 @@
                                Width="0"/>
 
                     <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Center" Width="498">
+                        <!-- Объект № -->
                         <TextBlock Style="{StaticResource ToolbarLabel}" Text="Объект №"/>
                         <ComboBox Style="{StaticResource ToolbarBox}"
-                                  ItemsSource="{Binding ObjectNumbers}"
-                                  SelectedItem="{Binding Header.ObjectNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
+          ItemsSource="{Binding ObjectNumbers}"
+          SelectedItem="{Binding Header.ObjectNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+          Width="80"/>
 
+                        <!-- Цикл № -->
                         <TextBlock Style="{StaticResource ToolbarLabel}" Text="Цикл №"/>
                         <ComboBox Style="{StaticResource ToolbarBox}"
-                                  ItemsSource="{Binding CycleNumbers}"
-                                  SelectedValuePath="."
-                                  SelectedValue="{Binding Header.CycleNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="80"/>
+          ItemsSource="{Binding CycleNumbers}"
+          SelectedItem="{Binding Header.CycleNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+          Width="80"/>
+
 
                         <TextBlock Style="{StaticResource ToolbarLabel}" Text="Единицы"/>
                         <ComboBox Style="{StaticResource ToolbarBox}"

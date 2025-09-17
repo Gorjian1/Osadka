@@ -404,31 +404,36 @@ private static bool LooksLikeHeader(string[] cells)
             if (dlg.ShowDialog() != true)
                 return;
 
-            var ws = dlg.SelectedWorksheet;
+            // строго работаем с IXLWorksheet
+            IXLWorksheet ws = dlg.SelectedWorksheet?.Sheet
+                ?? throw new InvalidOperationException("Не выбран лист Excel.");
+
             var objHeaders = dlg.ObjectHeaders;
             var cycleStarts = dlg.CycleStarts;
-            int objIdx = dlg.SelectedObjectIndex;
-            int cycleIdx = dlg.SelectedCycleIndex;
+            int objIdx = dlg.SelectedObjectIndex;   // 1-based
+            int cycleIdx = dlg.SelectedCycleIndex;  // 1-based
+
+            if (objHeaders == null || objHeaders.Count == 0)
+                objHeaders = FindObjectHeaders(ws);
+            if (objHeaders == null || objHeaders.Count == 0)
+                throw new InvalidOperationException("Не удалось найти заголовок с «№ точки» на листе.");
+
+            var hdrTuple = objIdx >= 1 && objIdx <= objHeaders.Count
+                ? objHeaders[objIdx - 1]
+                : objHeaders.First();
+
+            int idCol = hdrTuple.Cell.Address.ColumnNumber;
+            int subHdrRow = FindSubHeaderRow(ws, hdrTuple.Row, idCol);
 
             if (cycleStarts == null || cycleStarts.Count == 0)
             {
-                if (objHeaders == null || objHeaders.Count == 0)
-                    throw new InvalidOperationException("Не найдены заголовки объектов на листе.");
-
-                var hdrTuple = objIdx >= 1 && objIdx <= objHeaders.Count
-                    ? objHeaders[objIdx - 1]
-                    : objHeaders.First();
-
-                int idCol = hdrTuple.Cell.Address.ColumnNumber;
-                int subHdrRow = FindSubHeaderRow(ws, hdrTuple.Row, idCol, new List<int>());
                 var computed = FindCycleStarts(ws, subHdrRow, idCol);
-
                 if (computed.Count == 0)
                 {
                     int lastRow = ws.LastRowUsed().RowNumber();
                     for (int r = hdrTuple.Row; r <= Math.Min(hdrTuple.Row + 10, lastRow); r++)
                     {
-                        var anyOtm = ws.Row(r).Cells().Any(c =>
+                        bool anyOtm = ws.Row(r).Cells().Any(c =>
                             Regex.IsMatch(c.GetString(), @"^\s*Отметка", RegexOptions.IgnoreCase));
                         if (anyOtm)
                         {
@@ -438,125 +443,101 @@ private static bool LooksLikeHeader(string[] cells)
                         }
                     }
                 }
-
                 cycleStarts = computed;
             }
-            _cycleHeaders.Clear();
 
+            _cycleHeaders.Clear();
             ReadAllObjects(ws, objHeaders, cycleStarts);
 
             ObjectNumbers.Clear();
             foreach (var k in _objects.Keys.OrderBy(k => k)) ObjectNumbers.Add(k);
 
             CycleNumbers.Clear();
-            if (_objects.TryGetValue(objIdx, out var dict))
+            if (_objects.TryGetValue(1, out var firstObj))
+                foreach (var k in firstObj.Keys.OrderBy(k => k)) CycleNumbers.Add(k);
+
+            Header.ObjectNumber = objIdx <= ObjectNumbers.Count ? objIdx : (ObjectNumbers.Count > 0 ? ObjectNumbers[0] : 1);
+
+            if (CycleNumbers.Count > 0)
             {
-                foreach (var k in dict.Keys.OrderBy(k => k)) CycleNumbers.Add(k);
+                int idx = Math.Clamp(cycleIdx, 1, CycleNumbers.Count);
+                int chosenNumber = CycleNumbers[CycleNumbers.Count - idx];
+                Header.CycleNumber = chosenNumber;
             }
-
-            Header.ObjectNumber = objIdx;
-
-            if (CycleNumbers.Count > 0 && !CycleNumbers.Contains(cycleIdx))
-                Header.CycleNumber = CycleNumbers[0];
-            else
-                Header.CycleNumber = cycleIdx;
 
             RefreshData();
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Ошибка при импорте Excel:\n{ex.Message}",
-                            "Импорт", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"Ошибка при импорте Excel:\n{ex.Message}", "Импорт", MessageBoxButton.OK, MessageBoxImage.Error);
         }
 
-        IXLWorksheet? SelectWorksheet(XLWorkbook book)
-        {
-            if (book.Worksheets.Count == 0) return null;
-            if (book.Worksheets.Count == 1) return book.Worksheet(1);
+        // === локальные функции — все принимают IXLWorksheet ===
 
-            var list = book.Worksheets.Select((w, i) => $"{i + 1}. {w.Name}").ToArray();
-            return AskInt("Доступные листы:\n" + string.Join("\n", list) +
-                          "\nВведите № листа:", 1, list.Length, out int idx)
-                   ? book.Worksheet(idx)
-                   : null;
-        }
+        List<(int Row, IXLCell Cell)> FindObjectHeaders(IXLWorksheet sheet)
+            => sheet.RangeUsed()?
+                   .Rows()
+                   .Select(r =>
+                   {
+                       var hits = r.Cells().Where(c =>
+                           Regex.IsMatch(c.GetString(), @"^\s*№\s*(точки|мар\w*)", RegexOptions.IgnoreCase));
+                       if (!hits.Any()) return (Row: 0, Cell: (IXLCell?)null);
+                       var leftMost = hits.OrderBy(c => c.Address.ColumnNumber).First();
+                       return (Row: r.RowNumber(), Cell: leftMost);
+                   })
+                   .Where(t => t.Cell != null && t.Row > 0)
+                   .ToList()
+               ?? new List<(int Row, IXLCell Cell)>();
 
-        List<(int Row, IXLCell Cell)> FindObjectHeaders(IXLWorksheet sheet) =>
-            sheet.RangeUsed()
-                 .Rows()
-                 .Select(r => (Row: r.RowNumber(),
-                               Cell: r.Cells().FirstOrDefault(c =>
-                                      Regex.IsMatch(c.GetString(),
-                                                    @"^\s*№\s*мар", RegexOptions.IgnoreCase))))
-                 .Where(t => t.Cell != null)
-                 .ToList();
+        List<int> FindCycleStarts(IXLWorksheet sheet, int subHdrRow, int idColumn)
+            => sheet.Row(subHdrRow)
+                    .Cells()
+                    .Where(c => c.Address.ColumnNumber != idColumn &&
+                                c.GetString().Trim().StartsWith("Отметка", StringComparison.OrdinalIgnoreCase))
+                    .Select(c => c.Address.ColumnNumber)
+                    .Distinct()
+                    .OrderBy(c => c)
+                    .ToList();
 
-        List<int> FindCycleStarts(IXLWorksheet sheet, int subHdrRow, int idColumn) =>
-            sheet.Row(subHdrRow)
-                 .Cells()
-                 .Where(c => c.GetString().Trim()
-                              .StartsWith("Отметка", StringComparison.OrdinalIgnoreCase))
-                 .Select(c => c.Address.ColumnNumber)
-                 .Where(col => col != idColumn)
-                 .ToList();
-
-        int FindSubHeaderRow(IXLWorksheet s, int headerRow, int idColumn, List<int> cycCols)
+        int FindSubHeaderRow(IXLWorksheet s, int headerRow, int idColumn)
         {
             int lastRow = s.LastRowUsed().RowNumber();
-            int row = headerRow + 1;
-            int maxLookahead = Math.Min(headerRow + 6, lastRow);
-
-            for (; row <= maxLookahead; row++)
+            for (int r = headerRow + 1; r <= Math.Min(headerRow + 6, lastRow); r++)
             {
-                bool looksLikeSub = cycCols.Any(c =>
-                    Regex.IsMatch(s.Cell(row, c).GetString(), @"отметка", RegexOptions.IgnoreCase));
-
-                bool nextHasOtm = row + 1 <= lastRow && cycCols.Any(c =>
-                    Regex.IsMatch(s.Cell(row + 1, c).GetString(), @"отметка", RegexOptions.IgnoreCase));
-                bool thisHasAny = cycCols.Any(c => !string.IsNullOrWhiteSpace(s.Cell(row, c).GetString()));
-
-                if (looksLikeSub) return row;
-                if (thisHasAny && nextHasOtm) return row + 1;
+                bool ok = s.Row(r).Cells()
+                    .Any(c => c.Address.ColumnNumber != idColumn &&
+                              c.GetString().Trim().StartsWith("Отметка", StringComparison.OrdinalIgnoreCase));
+                if (ok) return r;
             }
-
             return headerRow + 1;
         }
 
-        string BuildCycleHeaderLabel(IXLWorksheet s, int startCol, int subRow, int headerRow)
-        {
-            var parts = new List<string>();
-            int r1 = subRow - 1;
-            int r2 = subRow - 2;
-
-            if (r2 >= headerRow && !string.IsNullOrWhiteSpace(s.Cell(r2, startCol).GetString()))
-                parts.Add(s.Cell(r2, startCol).GetString().Trim());
-
-            if (r1 >= headerRow && !string.IsNullOrWhiteSpace(s.Cell(r1, startCol).GetString()))
-                parts.Add(s.Cell(r1, startCol).GetString().Trim());
-
-            return string.Join(" ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
-        }
-
-        void ReadAllObjects(IXLWorksheet sheet,
-                            List<(int Row, IXLCell Cell)> headers,
-                            List<int> cycleCols)
+        void ReadAllObjects(IXLWorksheet sheet, List<(int Row, IXLCell Cell)> headers, List<int> cycleCols)
         {
             _objects.Clear();
+            if (headers == null || headers.Count == 0) return;
 
-            foreach (var (hdr, objNumber) in headers.Select((h, i) => (h, i + 1)))
+            headers = headers.OrderBy(h => h.Row).ToList();
+
+            for (int objNumber = 1; objNumber <= headers.Count; objNumber++)
             {
-                int idColLocal = hdr.Cell.Address.ColumnNumber;
+                var hdr = headers[objNumber - 1];
 
-                int subHdrRowLocal = FindSubHeaderRow(sheet, hdr.Row, idColLocal, cycleCols);
+                int idColLocal = hdr.Cell.Address.ColumnNumber;
+                int subHdrRowLocal = FindSubHeaderRow(sheet, hdr.Row, idColLocal);
 
                 int dataRowFirst = subHdrRowLocal + 1;
                 int dataRowLast = (objNumber == headers.Count
                                         ? sheet.LastRowUsed().RowNumber()
                                         : headers[objNumber].Row - 1);
 
+                var localCycCols = (cycleCols != null && cycleCols.Count > 0)
+                    ? cycleCols
+                    : FindCycleStarts(sheet, subHdrRowLocal, idColLocal);
+
                 var cyclesDict = new Dictionary<int, List<MeasurementRow>>();
 
-                foreach (var (cycIdx, startCol) in cycleCols.Select((c, i) => (i + 1, c)))
+                foreach (var (cycIdx, startCol) in localCycCols.Select((c, i) => (i + 1, c)))
                 {
                     string cycLabel = BuildCycleHeaderLabel(sheet, startCol, subHdrRowLocal, hdr.Row);
                     if (!string.IsNullOrWhiteSpace(cycLabel))
@@ -569,7 +550,7 @@ private static bool LooksLikeHeader(string[] cells)
                     {
                         string idText = sheet.Cell(r, idColLocal).GetString().Trim();
 
-                        if (Regex.IsMatch(idText, @"^\s*№\s*мар", RegexOptions.IgnoreCase))
+                        if (Regex.IsMatch(idText, @"^\s*№\s*(точки|мар\w*)", RegexOptions.IgnoreCase))
                             break;
 
                         if (string.IsNullOrEmpty(idText))
@@ -593,6 +574,7 @@ private static bool LooksLikeHeader(string[] cells)
                         }
                         if (settl.HasValue) settl = Math.Round(settl.Value, 1);
                         if (total.HasValue) total = Math.Round(total.Value, 1);
+
                         rows.Add(new MeasurementRow
                         {
                             Id = idText,
@@ -601,8 +583,7 @@ private static bool LooksLikeHeader(string[] cells)
                             Total = total,
                             MarkRaw = markRaw,
                             SettlRaw = settlRaw,
-                            TotalRaw = totalRaw,
-                            Cycle = cycIdx
+                            TotalRaw = totalRaw
                         });
                     }
 
@@ -611,6 +592,19 @@ private static bool LooksLikeHeader(string[] cells)
 
                 _objects[objNumber] = cyclesDict;
             }
+        }
+
+        string BuildCycleHeaderLabel(IXLWorksheet sheet, int startCol, int subHdrRow, int headerRow)
+        {
+            for (int dc = -2; dc <= 2; dc++)
+            {
+                int c = startCol + dc;
+                if (c <= 0) continue;
+                var s = sheet.Cell(headerRow, c).GetString();
+                if (Regex.IsMatch(s, @"Цикл\s*№", RegexOptions.IgnoreCase))
+                    return s.Trim();
+            }
+            return string.Empty;
         }
     }
 
