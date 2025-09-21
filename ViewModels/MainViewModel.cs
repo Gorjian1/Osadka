@@ -6,6 +6,9 @@ using Microsoft.Win32;
 using Osadka.Models;
 using Osadka.Services;
 using Osadka.Views;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -36,6 +39,19 @@ namespace Osadka.ViewModels
         public IRelayCommand SaveAsProjectCommand { get; }
         public IRelayCommand QuickReportCommand { get; }
         private CoordinateExporting? _coord;
+
+        private bool _isDirty;
+        public bool IsDirty
+        {
+            get => _isDirty;
+            private set => SetProperty(ref _isDirty, value);
+        }
+
+        private readonly HashSet<MeasurementRow> _trackedMeasurementRows = new();
+        private readonly HashSet<CoordRow> _trackedCoordRows = new();
+
+        public void MarkDirty() => IsDirty = true;
+        public void ResetDirty() => IsDirty = false;
 
         private object? _currentPage;
         private bool _includeGeneral = true;
@@ -92,6 +108,16 @@ namespace Osadka.ViewModels
         {
             RawVM = new RawDataViewModel();
 
+            RawVM.DataRows.CollectionChanged += DataRows_CollectionChanged;
+            RawVM.CoordRows.CollectionChanged += CoordRows_CollectionChanged;
+            RawVM.Header.PropertyChanged += Header_PropertyChanged;
+
+            foreach (var row in RawVM.DataRows)
+                SubscribeMeasurementRow(row);
+
+            foreach (var coord in RawVM.CoordRows)
+                SubscribeCoordRow(coord);
+
             var genSvc = new GeneralReportService();
             var relSvc = new RelativeReportService();
 
@@ -131,6 +157,7 @@ namespace Osadka.ViewModels
         {
             RawVM.ClearCommand.Execute(null);
             _currentPath = null;
+            ResetDirty();
         }
 
         public void LoadProject(string path)
@@ -173,6 +200,7 @@ namespace Osadka.ViewModels
                         vm.CycleNumbers.Add(cyc);
 
                 _currentPath = path;
+                ResetDirty();
             }
             catch (Exception ex)
             {
@@ -243,6 +271,119 @@ namespace Osadka.ViewModels
                 data,
                 new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(path, json);
+            ResetDirty();
+        }
+
+        private void SubscribeMeasurementRow(MeasurementRow? row)
+        {
+            if (row is null) return;
+            if (_trackedMeasurementRows.Add(row))
+            {
+                row.PropertyChanged += MeasurementRow_PropertyChanged;
+            }
+        }
+
+        private void UnsubscribeMeasurementRow(MeasurementRow? row)
+        {
+            if (row is null) return;
+            if (_trackedMeasurementRows.Remove(row))
+            {
+                row.PropertyChanged -= MeasurementRow_PropertyChanged;
+            }
+        }
+
+        private void SubscribeCoordRow(CoordRow? row)
+        {
+            if (row is null) return;
+            if (_trackedCoordRows.Add(row))
+            {
+                row.PropertyChanged += CoordRow_PropertyChanged;
+            }
+        }
+
+        private void UnsubscribeCoordRow(CoordRow? row)
+        {
+            if (row is null) return;
+            if (_trackedCoordRows.Remove(row))
+            {
+                row.PropertyChanged -= CoordRow_PropertyChanged;
+            }
+        }
+
+        private void DataRows_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                ClearMeasurementRowSubscriptions();
+                foreach (var row in RawVM.DataRows)
+                    SubscribeMeasurementRow(row);
+            }
+            else
+            {
+                if (e.OldItems != null)
+                    foreach (MeasurementRow row in e.OldItems)
+                        UnsubscribeMeasurementRow(row);
+
+                if (e.NewItems != null)
+                    foreach (MeasurementRow row in e.NewItems)
+                        SubscribeMeasurementRow(row);
+            }
+
+            MarkDirty();
+        }
+
+        private void CoordRows_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                ClearCoordRowSubscriptions();
+                foreach (var row in RawVM.CoordRows)
+                    SubscribeCoordRow(row);
+            }
+            else
+            {
+                if (e.OldItems != null)
+                    foreach (CoordRow row in e.OldItems)
+                        UnsubscribeCoordRow(row);
+
+                if (e.NewItems != null)
+                    foreach (CoordRow row in e.NewItems)
+                        SubscribeCoordRow(row);
+            }
+
+            MarkDirty();
+        }
+
+        private void MeasurementRow_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+            => MarkDirty();
+
+        private void CoordRow_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+            => MarkDirty();
+
+        private void Header_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is nameof(CycleHeader.CycleNumber)
+                or nameof(CycleHeader.MaxNomen)
+                or nameof(CycleHeader.MaxCalculated)
+                or nameof(CycleHeader.RelNomen)
+                or nameof(CycleHeader.RelCalculated))
+            {
+                MarkDirty();
+            }
+        }
+
+        private void ClearMeasurementRowSubscriptions()
+        {
+            foreach (var row in _trackedMeasurementRows.ToList())
+                row.PropertyChanged -= MeasurementRow_PropertyChanged;
+            _trackedMeasurementRows.Clear();
+        }
+
+        private void ClearCoordRowSubscriptions()
+        {
+            foreach (var row in _trackedCoordRows.ToList())
+                row.PropertyChanged -= CoordRow_PropertyChanged;
+            _trackedCoordRows.Clear();
         }
 
         private void DoQuickExport()

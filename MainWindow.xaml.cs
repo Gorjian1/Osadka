@@ -25,7 +25,33 @@ namespace Osadka
         }
         private void MainWindow_Closing(object? sender, CancelEventArgs e)
         {
+            if (!_vm.IsDirty)
+                return;
 
+            var result = MessageBox.Show(
+                "Сохранить изменения перед выходом?",
+                "Osadka",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Cancel)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            if (result == MessageBoxResult.Yes)
+            {
+                if (_vm.SaveProjectCommand.CanExecute(null))
+                {
+                    _vm.SaveProjectCommand.Execute(null);
+                }
+
+                if (_vm.IsDirty)
+                {
+                    e.Cancel = true;
+                }
+            }
         }
         private async void OnCheckUpdateClick(object sender, RoutedEventArgs e)
         {
