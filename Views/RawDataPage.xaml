@@ -159,6 +159,25 @@
             <Setter Property="Margin" Value="0,0,12,0"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
+        <ToolTip x:Key="TagsTooltip"
+             Placement="Bottom"
+             StaysOpen="False"
+             HasDropShadow="True"
+             MaxWidth="560"
+             MaxHeight="480">
+            <Border Padding="8" Background="{DynamicResource App.PanelBg}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <TextBox Text="{Binding TagsHelpText}"
+                         IsReadOnly="True"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         FontSize="13"
+                         MinWidth="280"/>
+                </ScrollViewer>
+            </Border>
+        </ToolTip>
     </UserControl.Resources>
 
     <Grid RenderTransformOrigin="0.501,0.506">
@@ -245,7 +264,7 @@
                VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                 <Button.ToolTip>
                                     <ToolTip MaxWidth="460">
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto" Height="450">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" Height="480">
                                             <StackPanel>
                                                 <TextBlock FontWeight="Bold" Text="Теги" Margin="0,0,0,6"/>
                                                 <TextBlock TextWrapping="Wrap">

@@ -1,85 +1,112 @@
-﻿using DocumentFormat.OpenXml.Drawing;
-using Osadka.Models;
+﻿using System;
 using System.Collections.Generic;
- using System.Linq;
- using Osadka.Models;
- 
- namespace Osadka.Services
+using System.Linq;
+using Osadka.Models;
+
+namespace Osadka.Services
 {
     public record RelativeRow(
         string Id1,
         string Id2,
-        double Distance,
-        double DeltaTotal,
-        double Ratio);
+        double Distance,    // мм
+        double DeltaTotal,  // мм
+        double Ratio);      // ΔS / Dist
+
+   // public record Extremum(double Value, IReadOnlyList<string> Ids);
 
     public record RelativeReport(
         IReadOnlyList<RelativeRow> AllRows,
         IReadOnlyList<RelativeRow> ExceededSpRows,
-        IReadOnlyList<RelativeRow> ExceededCalcRows,        
+        IReadOnlyList<RelativeRow> ExceededCalcRows,
         Extremum MaxRelative);
 
     public sealed class RelativeReportService
     {
         public RelativeReport Build(
-            IEnumerable<CoordRow> coords,
-            IEnumerable<MeasurementRow> rows,
+            IEnumerable<CoordRow> coordsAligned,   // ВЫРАВНЕНЫ ПО ПОЗИЦИИ под DataRows
+            IEnumerable<MeasurementRow> rows,      // та же длина, что coordsAligned
             double limitSp,
             double limitCalc)
         {
+            // НИКАКОЙ фильтрации по Total — пары строим строго по индексам!
+            var points = coordsAligned.Zip(rows, (c, r) => (Coord: c, Row: r)).ToList();
 
-            var validPoints = coords
-                            .Zip(rows, (coord, row) => (Coord: coord, Row: row))
-                            .Where(pair => pair.Row.Total is { } t && !double.IsNaN(t))
-                             .ToList();
-
-            int n = validPoints.Count;
-            var list = new List<RelativeRow>();
+            int n = points.Count;
+            var all = new List<RelativeRow>(n > 1 ? n * (n - 1) / 2 : 0);
 
             for (int i = 0; i < n; i++)
             {
                 for (int j = i + 1; j < n; j++)
                 {
+                    var (c1, r1) = points[i];
+                    var (c2, r2) = points[j];
 
-                    var(coord1, r1) = validPoints[i];
-                    var(coord2, r2) = validPoints[j];
+                    // Дистанция — только если у обеих точек валидные координаты
+                    double dist;
+                    if (IsFinite(c1.X) && IsFinite(c1.Y) && IsFinite(c2.X) && IsFinite(c2.Y))
+                    {
+                        double dx = c2.X - c1.X;
+                        double dy = c2.Y - c1.Y;
+                        dist = Math.Sqrt(dx * dx + dy * dy);
+                    }
+                    else
+                    {
+                        dist = double.NaN;
+                    }
 
-                    var(x1, y1) = (coord1.X, coord1.Y);
-                    var(x2, y2) = (coord2.X, coord2.Y);
+                    // ΔS — только если оба Total заданы
+                    double dS;
+                    if (r1.Total is double t1 && IsFinite(t1) &&
+                        r2.Total is double t2 && IsFinite(t2))
+                    {
+                        dS = t2 - t1;
+                    }
+                    else
+                    {
+                        dS = double.NaN;
+                    }
 
-                    double dx = x2 - x1;
-                    double dy = y2 - y1;
-                    double dist = Math.Sqrt(dx * dx + dy * dy);
+                    // Относительная — только при валидных dist и dS
+                    double ratio = (IsFinite(dist) && dist > 0 && IsFinite(dS))
+                        ? dS / dist
+                        : double.NaN;
 
-                    double dT = r2.Total!.Value - r1.Total!.Value;
-                    double ratio = dist > 0 ? dT / dist : double.NaN;
-
-                    list.Add(new RelativeRow(
+                    all.Add(new RelativeRow(
                         r1.Id, r2.Id,
-                        Math.Round(dist, 4),
-                        Math.Round(dT, 4),
-                        Math.Round(ratio, 6)));
+                        RoundOrNaN(dist, 4),
+                        RoundOrNaN(dS, 4),
+                        RoundOrNaN(ratio, 6)));
                 }
             }
 
-            var excSp = list.Where(r => Math.Abs(r.Ratio) > limitSp).ToList();
-            var excCalc = list.Where(r => Math.Abs(r.Ratio) > limitCalc).ToList();
+            // Превышения считаем только по валидным ratio
+            var valid = all.Where(r => IsFinite(r.Ratio)).ToList();
+            var excSp = valid.Where(r => Math.Abs(r.Ratio) > limitSp).ToList();
+            var excCalc = valid.Where(r => Math.Abs(r.Ratio) > limitCalc).ToList();
+
+            // Максимум по модулю
             Extremum maxRel;
-            if (list.Count > 0)
+            if (valid.Count > 0)
             {
-                var maxAbs = list.Max(r => Math.Abs(r.Ratio));
-                var maxIds = list
+                var maxAbs = valid.Max(r => Math.Abs(r.Ratio));
+                var ids = valid
                     .Where(r => Math.Abs(Math.Abs(r.Ratio) - maxAbs) < 1e-9)
                     .Select(r => $"{r.Id1}-{r.Id2}")
                     .ToList();
 
-                maxRel = new Extremum(Math.Round(maxAbs, 6), maxIds);
+                maxRel = new Extremum(Math.Round(maxAbs, 6), ids);
             }
             else
             {
                 maxRel = new Extremum(double.NaN, Array.Empty<string>());
             }
-            return new RelativeReport(list, excSp, excCalc, maxRel);
+
+            return new RelativeReport(all, excSp, excCalc, maxRel);
         }
+
+        private static bool IsFinite(double v) => !double.IsNaN(v) && !double.IsInfinity(v);
+
+        private static double RoundOrNaN(double v, int digits)
+            => IsFinite(v) ? Math.Round(v, digits) : double.NaN;
     }
 }

@@ -32,8 +32,6 @@ public partial class RawDataViewModel : ObservableObject
 
         OnPropertyChanged(nameof(HasCustomTemplate));
     }
-
-
     public IRelayCommand OpenTemplate { get; }
     public IRelayCommand ChooseOrOpenTemplateCommand { get; }  // ← НОВАЯ (левая часть сплит-кнопки)
     public IRelayCommand ClearTemplateCommand { get; }

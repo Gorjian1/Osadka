@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using ClosedXML.Excel;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -613,32 +614,55 @@ namespace Osadka.ViewModels
 
         private void AddRelativeSheet(XLWorkbook wb)
         {
-            var ws = wb.AddWorksheet("Относительная разность");
-            ws.Cell(1, 1).Value = "Точка №1";
-            ws.Cell(1, 2).Value = "Точка №2";
-            ws.Cell(1, 3).Value = "Расстояние, мм";
-            ws.Cell(1, 4).Value = "Абс. Разность, мм";
-            ws.Cell(1, 5).Value = "Отн. Разность";
+            // Получаем/создаём лист
+            var ws = wb.Worksheets.FirstOrDefault(s =>
+                         s.Name.Equals("Относительная разность", StringComparison.OrdinalIgnoreCase))
+                     ?? wb.AddWorksheet("Относительная разность");
+            ws.Clear();
+
+            // Заголовки (как на скрине)
+            ws.Cell(1, 1).Value = "№1";
+            ws.Cell(1, 2).Value = "№2";
+            ws.Cell(1, 3).Value = "Dist, мм";
+            ws.Cell(1, 4).Value = "ΔS, мм";
+            ws.Cell(1, 5).Value = "ΔS/Dist";
+
+            // Хелпер: число или прочерк
+            static void SetNumberOrDash(IXLCell cell, double value, string? format = null)
+            {
+                if (double.IsNaN(value) || double.IsInfinity(value))
+                {
+                    cell.Value = "-";
+                   // cell.XLDataType(XLDataType.Text);           // вместо cell.DataType = ...
+                    cell.Style.NumberFormat.Format = "@";        // принудительно "Текст"
+                }
+                else
+                {
+                    cell.Value = value;
+                    if (!string.IsNullOrWhiteSpace(format))
+                        cell.Style.NumberFormat.Format = format;
+                }
+            }
+
+            // Данные
             int r = 2;
             foreach (var row in RelVM.AllRows)
             {
                 ws.Cell(r, 1).Value = row.Id1;
                 ws.Cell(r, 2).Value = row.Id2;
-                ws.Cell(r, 3).Value = row.Distance;
-                ws.Cell(r, 4).Value = row.DeltaTotal;
-                ws.Cell(r, 5).Value = $"{row.Ratio:F5}";
+
+                // Форматы при необходимости можно подправить
+                SetNumberOrDash(ws.Cell(r, 3), row.Distance, "0.0");      // мм
+                SetNumberOrDash(ws.Cell(r, 4), row.DeltaTotal, "0.0");      // мм
+                SetNumberOrDash(ws.Cell(r, 5), row.Ratio, "0.000000"); // безразмерный
+
                 r++;
             }
 
-            int lastDataRow = r - 1;
-            var rng = ws.Range(1, 1, lastDataRow, 5);
-
-            rng.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-            rng.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
-
-            rng.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            ws.Row(1).Style.Font.Bold = true;
+            // Оформление
+            ws.Range(1, 1, 1, 5).Style.Font.Bold = true;
             ws.Columns(1, 5).AdjustToContents();
+            ws.SheetView.FreezeRows(1);
         }
 
         private void AddDynamicsSheet(XLWorkbook wb)
@@ -718,7 +742,7 @@ namespace Osadka.ViewModels
             var wsDynData = ws.DefinedNames.FirstOrDefault(n =>
                 n.Name.Equals("DynData", System.StringComparison.OrdinalIgnoreCase));
             wsDynData?.Delete();
-
+            
             wb.CalculateMode = XLCalculateMode.Auto;
         }
     }

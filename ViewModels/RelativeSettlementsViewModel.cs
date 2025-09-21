@@ -61,38 +61,37 @@ namespace Osadka.ViewModels
             double spLim = _raw.Header.RelNomen ?? 0;
             double calcLim = _raw.Header.RelCalculated ?? 0;
 
-            // 1) Снимем «срез» данных
-            var data = _raw.DataRows.ToList();   // длина = N данных (включая прочерки)
-            var coords = _raw.CoordRows.ToList();  // может быть короче, т.к. точки с прочерком часто не отрисованы
+            // 1) Берём срез данных (включая прочерки)
+            var data = _raw.DataRows.ToList();
+            var coords = _raw.CoordRows.ToList();
 
-            // 2) ВЫРАВНИВАНИЕ КООРДИНАТ ПОД ДАННЫЕ (ключ к фиксу смещения)
-            // Для каждой строки DataRows оставляем место в координатах:
-            // - если Total числовой — берём СЛЕДУЮЩУЮ координату из входного списка;
-            // - если Total нечисловой — вставляем заглушку (NaN, NaN) на этом же индексе.
+            // 2) ВЫРАВНИВАНИЕ ТОЛЬКО ПО ПОЗИЦИИ:
+            //    координаты "прочёркнутых" точек НЕ удаляем, берём по индексу
             var coordsAligned = new List<CoordRow>(data.Count);
-            int ci = 0;
             for (int i = 0; i < data.Count; i++)
             {
-                if (HasNumericTotal(data[i]) && ci < coords.Count)
-                {
-                    coordsAligned.Add(coords[ci]);
-                    ci++;
-                }
+                if (i < coords.Count)
+                    coordsAligned.Add(coords[i]);
                 else
-                {
                     coordsAligned.Add(new CoordRow { X = double.NaN, Y = double.NaN, Id = data[i].Id });
-                }
             }
 
-            // 3) Отдаём в бизнес-логику уже выровненные массивы одинаковой длины
+            // 3) Расчёт (без фильтраций — пары строго по индексам)
             var report = _relSvc.Build(coordsAligned, data, spLim, calcLim);
 
-            // 4) Применяем
+            // 4) СОХРАНИТЬ отчёт во VM (важно для экспорта/тегов)
             Report = report;
+            OnPropertyChanged(nameof(Report));
+            OnPropertyChanged(nameof(RelativeMaxValue));
+            OnPropertyChanged(nameof(RelativeMaxIdPairs));
+
+            // 5) Обновить таблицы
             AllRows.Reset(report.AllRows);
             ExceededSpRows.Reset(report.ExceededSpRows);
             ExceededCalcRows.Reset(report.ExceededCalcRows);
         }
+
+
     }
 
     internal static class CollectionExtensions
