@@ -32,6 +32,16 @@ public partial class RawDataViewModel : ObservableObject
 
         OnPropertyChanged(nameof(HasCustomTemplate));
     }
+    [ObservableProperty]
+    private string? drawingPath;
+    public class CycleDisplayItem
+    {
+        public int Number { get; set; }
+        public string Label { get; set; } = "";
+    }
+    public ObservableCollection<CycleDisplayItem> CycleItems { get; } = new();
+
+
     public IRelayCommand OpenTemplate { get; }
     public IRelayCommand ChooseOrOpenTemplateCommand { get; }  // ← НОВАЯ (левая часть сплит-кнопки)
     public IRelayCommand ClearTemplateCommand { get; }
@@ -99,7 +109,23 @@ public partial class RawDataViewModel : ObservableObject
         }
 
         SelectedCycleHeader =
-            _cycleHeaders.TryGetValue(Header.CycleNumber, out var h) ? h : string.Empty;
+            _cycleHeaders.TryGetValue(Header.CycleNumber, out var cycleHdr)
+                ? cycleHdr
+                : string.Empty;
+
+        // Собираем список элементов для UI (показываем лейблы)
+        CycleItems.Clear();
+        if (_objects.TryGetValue(Header.ObjectNumber, out var cyclesDict))
+        {
+            foreach (var k in cyclesDict.Keys.OrderByDescending(k => k)) // как в импорте: правый = поздний
+            {
+                var label = _cycleHeaders.TryGetValue(k, out var h) && !string.IsNullOrWhiteSpace(h)
+                            ? h
+                            : $"Цикл {k}";
+                CycleItems.Add(new CycleDisplayItem { Number = k, Label = label });
+            }
+        }
+
 
         OnPropertyChanged(nameof(ShowPlaceholder));
     }
@@ -448,20 +474,31 @@ private static bool LooksLikeHeader(string[] cells)
             ReadAllObjects(ws, objHeaders, cycleStarts);
 
             ObjectNumbers.Clear();
-            foreach (var k in _objects.Keys.OrderBy(k => k)) ObjectNumbers.Add(k);
+            foreach (var k in _objects.Keys.OrderBy(k => k))
+                ObjectNumbers.Add(k);
 
+            // 1) Сначала ставим выбранный ОБЪЕКТ (как выбрал пользователь в Import)
+            Header.ObjectNumber = (objIdx >= 1 && objIdx <= ObjectNumbers.Count)
+                ? ObjectNumbers[objIdx - 1]
+                : (ObjectNumbers.Count > 0 ? ObjectNumbers[0] : 1);
+
+            // 2) Обновляем список циклов ИМЕННО для выбранного объекта
             CycleNumbers.Clear();
-            if (_objects.TryGetValue(1, out var firstObj))
-                foreach (var k in firstObj.Keys.OrderBy(k => k)) CycleNumbers.Add(k);
+            if (_objects.TryGetValue(Header.ObjectNumber, out var cyclesForObject))
+            {
+                foreach (var k in cyclesForObject.Keys.OrderBy(k => k))
+                    CycleNumbers.Add(k);
+            }
 
-            Header.ObjectNumber = objIdx <= ObjectNumbers.Count ? objIdx : (ObjectNumbers.Count > 0 ? ObjectNumbers[0] : 1);
-
+            // 3) Выставляем выбранный ЦИКЛ по внутреннему порядку слева-направо
             if (CycleNumbers.Count > 0)
             {
                 int idx = Math.Clamp(cycleIdx, 1, CycleNumbers.Count);
-                int chosenNumber = CycleNumbers[CycleNumbers.Count - idx];
+                int chosenNumber = CycleNumbers[idx - 1];   // без разворота
                 Header.CycleNumber = chosenNumber;
             }
+
+
 
             RefreshData();
         }
@@ -591,19 +628,52 @@ private static bool LooksLikeHeader(string[] cells)
                 _objects[objNumber] = cyclesDict;
             }
         }
-
         string BuildCycleHeaderLabel(IXLWorksheet sheet, int startCol, int subHdrRow, int headerRow)
         {
-            for (int dc = -2; dc <= 2; dc++)
+            string Read(IXLCell cell)
             {
-                int c = startCol + dc;
-                if (c <= 0) continue;
-                var s = sheet.Cell(headerRow, c).GetString();
-                if (Regex.IsMatch(s, @"Цикл\s*№", RegexOptions.IgnoreCase))
-                    return s.Trim();
+                var s = cell.GetString();
+                if (!string.IsNullOrWhiteSpace(s)) return s;
+                var mr = cell.MergedRange();
+                return mr != null ? mr.FirstCell().GetString() : s;
             }
+
+            int r1 = Math.Max(1, headerRow - 2);
+            int r2 = subHdrRow + 1;
+
+            // 1) Сначала ищем ТОЛЬКО внутри текущей тройки колонок (Отметка/Осадка/Общая)
+            for (int r = r1; r <= r2; r++)
+            {
+                for (int c = startCol; c <= startCol + 2; c++)
+                {
+                    var s = Read(sheet.Cell(r, c));
+                    if (!string.IsNullOrWhiteSpace(s) &&
+                        System.Text.RegularExpressions.Regex.IsMatch(s, @"^\s*Цикл\b",
+                            System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                        return s.Trim();
+                }
+            }
+
+            // 2) Фолбэк: центр-сначала (0, +1, -1, +2, -2, +3, -3) — больше не «липнем» к предыдущему циклу
+            int[] offs = new[] { 0, +1, -1, +2, -2, +3, -3 };
+            for (int r = r1; r <= r2; r++)
+            {
+                foreach (var dc in offs)
+                {
+                    int c = startCol + dc;
+                    if (c <= 0) continue;
+
+                    var s = Read(sheet.Cell(r, c));
+                    if (!string.IsNullOrWhiteSpace(s) &&
+                        System.Text.RegularExpressions.Regex.IsMatch(s, @"^\s*Цикл\b",
+                            System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                        return s.Trim();
+                }
+            }
+
             return string.Empty;
         }
+
     }
 
     private static (double? val, string raw) ParseCell(IXLCell cell)

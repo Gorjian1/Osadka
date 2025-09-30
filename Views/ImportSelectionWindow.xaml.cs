@@ -1,4 +1,5 @@
-﻿using ClosedXML.Excel;
+﻿// ReSharper disable InconsistentNaming
+using ClosedXML.Excel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System;
 using System.Collections.Generic;
@@ -161,7 +162,6 @@ namespace Osadka.Views
                 .Select(s => s.StartColumn)
                 .ToList();
 
-
             // Внутренняя нумерация — слева-направо (ASC)
             var ordinalByCol = starts
                 .Select((s, idx) => (s.StartColumn, Ordinal: idx + 1))
@@ -265,22 +265,38 @@ namespace Osadka.Views
             return count;
         }
 
+        // === Утилита для чтения текста с учётом слитых ячеек ===
+        private static string Text(IXLCell cell)
+        {
+            var s = cell.GetString();
+            if (!string.IsNullOrWhiteSpace(s)) return s;
+            var mr = cell.MergedRange();
+            return mr != null ? mr.FirstCell().GetString() : s;
+        }
+
+        // === Поиск стартов циклов (устойчиво к переносу «Цикл № …» на соседнюю строку и merge) ===
         private static List<(int StartColumn, string Label)> FindCycleStartsV2(IXLWorksheet sheet, int headerRow, int subHeaderRow, int idColLeft)
         {
             var starts = new List<(int StartColumn, string Label)>();
 
-            var headerCells = sheet.Row(headerRow).Cells().ToList();
-            var cycleHeaderCells = headerCells
-                .Where(c => Regex.IsMatch(c.GetString(), @"Цикл\s*№", RegexOptions.IgnoreCase))
-                .ToList();
-
-            foreach (var hc in cycleHeaderCells)
+            // 1) Ищем подписи «Цикл № …» в окрестности шапки: от headerRow-2 до subHeaderRow+1
+            int r1 = Math.Max(1, headerRow - 2);
+            int r2 = subHeaderRow + 1;
+            for (int r = r1; r <= r2; r++)
             {
-                int candidateCol = FindNearestOtmColumnOnOrRight(sheet, subHeaderRow, hc.Address.ColumnNumber, idColLeft);
-                if (candidateCol > 0)
-                    starts.Add((candidateCol, hc.GetString().Trim()));
+                foreach (var c in sheet.Row(r).CellsUsed())
+                {
+                    var s = Text(c);
+                    if (Regex.IsMatch(s ?? string.Empty, @"^\s*Цикл\b", RegexOptions.IgnoreCase))
+                    {
+                        int candidateCol = FindNearestOtmColumnOnOrRight(sheet, subHeaderRow, c.Address.ColumnNumber, idColLeft);
+                        if (candidateCol > 0)
+                            starts.Add((candidateCol, s.Trim()));
+                    }
+                }
             }
 
+            // 2) Добираем все колонки «Отметка …» на строке подзаголовков
             var otmCols = sheet.Row(subHeaderRow).Cells()
                 .Where(c => c.Address.ColumnNumber != idColLeft &&
                             c.GetString().Trim().StartsWith("Отметка", StringComparison.OrdinalIgnoreCase))
@@ -325,13 +341,17 @@ namespace Osadka.Views
 
         private static string FindCycleLabelNear(IXLWorksheet sheet, int headerRow, int aroundColumn)
         {
-            for (int dc = -2; dc <= 2; dc++)
+            // Сканируем несколько строк вокруг headerRow и несколько колонок вокруг искомой
+            for (int r = Math.Max(1, headerRow - 2); r <= headerRow + 2; r++)
             {
-                int c = aroundColumn + dc;
-                if (c <= 0) continue;
-                var s = sheet.Cell(headerRow, c).GetString();
-                if (Regex.IsMatch(s, @"Цикл\s*№", RegexOptions.IgnoreCase))
-                    return s.Trim();
+                for (int dc = -3; dc <= 3; dc++)
+                {
+                    int c = aroundColumn + dc;
+                    if (c <= 0) continue;
+                    var s = Text(sheet.Cell(r, c));
+                    if (Regex.IsMatch(s ?? string.Empty, @"^\s*Цикл\b", RegexOptions.IgnoreCase))
+                        return s.Trim();
+                }
             }
             return string.Empty;
         }
@@ -352,14 +372,12 @@ namespace Osadka.Views
         public int IdLeftColumn { get; set; }
         public int IdRightColumn { get; set; }
         public int RowsCountHint { get; set; }
-        public string Display => RowsCountHint > 0
-            ? $"{Index}"
-            : $"{Index}";
+        public string Display => RowsCountHint > 0 ? $"{Index}" : $"{Index}";
     }
 
     public class CycleItem : INotifyPropertyChanged
     {
-        public int Index { get; set; }          // внутренний индекс цикла (слева-направо)
+        public int Index { get; set; }          // внутренняя нумерация цикла (слева-направо)
         public int StartColumn { get; set; }    // Excel-колонка начала тройки
         public string Label { get; set; } = string.Empty;
         public string Display => string.IsNullOrWhiteSpace(Label) ? $"{Index}" : Label;

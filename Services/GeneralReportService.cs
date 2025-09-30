@@ -120,7 +120,13 @@ namespace Osadka.Services
             var @new = rows.Where(r => r.SettlRaw.Contains("нов", StringComparison.OrdinalIgnoreCase)).Select(r => r.Id).ToList();
             var destroyed = rows.Where(r => r.MarkRaw.Contains("унич", StringComparison.OrdinalIgnoreCase)).Select(r => r.Id).ToList();
 
-            static bool Exceeded(double x, double lim) => x < -Math.Abs(lim);
+            static bool Exceeded(double x, double lim)
+            {
+                // Лимит выключен: пусто/NaN/∞/≤0 — не считаем превышения
+                if (!double.IsFinite(lim) || lim <= 0) return false;
+
+                return x < -Math.Abs(lim);
+            }
             var exceedSp = total.Where(r => Exceeded(r.Total!.Value, limitSp)).Select(r => r.Id).ToList();
             var exceedCalc = total.Where(r => Exceeded(r.Total!.Value, limitCalc)).Select(r => r.Id).ToList();
 

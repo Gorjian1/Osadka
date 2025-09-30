@@ -325,10 +325,15 @@
 
                         <!-- Цикл № -->
                         <TextBlock Style="{StaticResource ToolbarLabel}" Text="Цикл №"/>
-                        <ComboBox Style="{StaticResource ToolbarBox}"
-          ItemsSource="{Binding CycleNumbers}"
-          SelectedItem="{Binding Header.CycleNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-          Width="80"/>
+                        <!-- Циклы -->
+                        <ComboBox
+    ItemsSource="{Binding CycleItems}"
+    SelectedValue="{Binding Header.CycleNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+    SelectedValuePath="Number"
+    DisplayMemberPath="Label"
+    MinWidth="140"
+    Width="80"/>
+
 
 
                         <TextBlock Style="{StaticResource ToolbarLabel}" Text="Единицы"/>

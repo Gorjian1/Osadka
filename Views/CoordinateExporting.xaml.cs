@@ -29,7 +29,12 @@ namespace Osadka.Views
             InitializeComponent();
             DataContext = new CoordinateExportingViewModel(raw);
 
-            Loaded += (_, __) => Fit();
+            Loaded += (_, __) =>
+            {
+                if (!string.IsNullOrWhiteSpace(raw.DrawingPath) && System.IO.File.Exists(raw.DrawingPath))
+                    Vm.OpenDwgFromPath(raw.DrawingPath);
+                Fit();
+            };
             SizeChanged += (_, __) => Fit();
 
             OverlayCanvas.Children.Add(_ruler);
@@ -45,9 +50,22 @@ namespace Osadka.Views
             ImageHost.PreviewDragOver += OnDwgDragOver;
             ImageHost.Drop += OnDwgDrop;
 
+            // перерисовываем крестики при смене масштаба/плотности/границ
+            Vm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(CoordinateExportingViewModel.EffectiveScale) ||
+                    e.PropertyName == nameof(CoordinateExportingViewModel.PixelsPerUnit) ||
+                    e.PropertyName == nameof(CoordinateExportingViewModel.MinX) ||
+                    e.PropertyName == nameof(CoordinateExportingViewModel.MaxY))
+                {
+                    RedrawSelectedPoints();
+                }
+            };
+
             Focusable = true;
             Focus();
         }
+
 
         private DataTemplate CreateLayerItemTemplate()
         {
@@ -210,15 +228,34 @@ namespace Osadka.Views
             else if (Vm.IsSelectMode)
             {
                 var cad = PxToCad(p);
-                var use = (cad.X, cad.Y);
+                Vm.SelectedPoints.Add(new System.Windows.Point(cad.X, cad.Y));
 
-                Vm.SelectedPoints.Add(new WpfPoint(use.Item1, use.Item2));
-
-                var px = (use.Item1 - Vm.MinX) * Vm.PixelsPerUnit;
-                var py = (Vm.MaxY - use.Item2) * Vm.PixelsPerUnit;
+                // ВАЖНО: Canvas внутри того же Grid, который масштабируется LayoutTransform,
+                // поэтому здесь НЕ умножаем на EffectiveScale
+                var px = (cad.X - Vm.MinX) * Vm.PixelsPerUnit;
+                var py = (Vm.MaxY - cad.Y) * Vm.PixelsPerUnit;
                 DrawCross(px, py);
             }
         }
+
+        private void RedrawSelectedPoints()
+        {
+            // сохраним линейку и метку
+            var keep = new HashSet<UIElement> { _ruler, _label };
+            var toRemove = new List<UIElement>();
+            foreach (UIElement el in OverlayCanvas.Children)
+                if (!keep.Contains(el)) toRemove.Add(el);
+            foreach (var el in toRemove) OverlayCanvas.Children.Remove(el);
+            _crossStack.Clear();
+
+            foreach (var pt in Vm.SelectedPoints)
+            {
+                var px = (pt.X - Vm.MinX) * Vm.PixelsPerUnit;
+                var py = (Vm.MaxY - pt.Y) * Vm.PixelsPerUnit;
+                DrawCross(px, py);
+            }
+        }
+
 
         private void UndoLastPoint()
         {
@@ -289,12 +326,15 @@ namespace Osadka.Views
             Canvas.SetTop(_label, (p0.Y + p1.Y) / 2);
         }
 
-        private (double X, double Y) PxToCad(WpfPoint p)
+        private (double X, double Y) PxToCad(System.Windows.Point p)
         {
-            double dwgX = Vm.MinX + p.X / Vm.PixelsPerUnit;
-            double dwgY = Vm.MaxY - p.Y / Vm.PixelsPerUnit;
+            // учитываем зум (LayoutTransform масштабирует грид)
+            double s = Math.Max(Vm.EffectiveScale, 1e-9);
+            double dwgX = Vm.MinX + p.X / (Vm.PixelsPerUnit * s);
+            double dwgY = Vm.MaxY - p.Y / (Vm.PixelsPerUnit * s);
             return (dwgX, dwgY);
         }
+
 
         private static bool IsAccepted(string path)
         {

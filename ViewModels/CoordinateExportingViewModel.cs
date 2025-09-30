@@ -31,6 +31,8 @@ namespace Osadka.ViewModels
     public partial class CoordinateExportingViewModel : ObservableObject
     {
         private readonly RawDataViewModel _raw;
+        public RawDataViewModel Raw => _raw;
+
 
         public CoordinateExportingViewModel(RawDataViewModel raw)
         {
@@ -142,22 +144,19 @@ namespace Osadka.ViewModels
                 PixelsPerUnit = targetPx / Math.Max(dwgW, dwgH);
 
                 RebuildGridBrush();
-
                 RebuildLayersFromDoc();
                 BuildGeometryCache();
                 RebuildScene();
 
-                ZoomFactor = 1.0;
-                OnPropertyChanged(nameof(ScaleBarPixels));
-                SelectedPoints.Clear();
-                Contours.Clear();
+                // запоминаем путь в VM «сырья», чтобы сохранить в .osd
+                _raw.DrawingPath = filePath;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка чтения DWG: {ex.Message}", "Ошибка",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Ошибка чтения DWG:\n{ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
 
         private void OpenDwg()
         {

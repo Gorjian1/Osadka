@@ -6,6 +6,13 @@ using Microsoft.Win32;
 using Osadka.Models;
 using Osadka.Services;
 using Osadka.Views;
+<<<<<<< Updated upstream
+=======
+using System.Text.Json.Nodes;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.ComponentModel;
+>>>>>>> Stashed changes
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -91,6 +98,15 @@ namespace Osadka.ViewModels
         public MainViewModel()
         {
             RawVM = new RawDataViewModel();
+            RawVM.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(RawDataViewModel.TemplatePath) ||
+                    e.PropertyName == nameof(RawDataViewModel.CoordUnit) ||
+                    e.PropertyName == nameof(RawDataViewModel.DrawingPath))
+                {
+                    MarkDirty();
+                }
+            };
 
             var genSvc = new GeneralReportService();
             var relSvc = new RelativeReportService();
@@ -139,8 +155,12 @@ namespace Osadka.ViewModels
 
             try
             {
-                var json = File.ReadAllText(path);
-                var data = JsonSerializer.Deserialize<ProjectData>(json)
+                var json = System.IO.File.ReadAllText(path);
+
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                string? dwgPath = doc.RootElement.TryGetProperty("DwgPath", out var p) ? p.GetString() : null;
+
+                var data = System.Text.Json.JsonSerializer.Deserialize<ProjectData>(json)
                            ?? throw new InvalidOperationException("Невалидный формат");
 
                 vm.Header.CycleNumber = data.Cycle;
@@ -152,37 +172,30 @@ namespace Osadka.ViewModels
 
                 vm.DataRows.Clear();
                 foreach (var r in data.DataRows) vm.DataRows.Add(r);
+
                 vm.CoordRows.Clear();
-                foreach (var c in data.CoordRows) vm.CoordRows.Add(c);
+                foreach (var r in data.CoordRows) vm.CoordRows.Add(r);
 
                 vm.Objects.Clear();
-                foreach (var objKv in data.Objects)
-                {
-                    vm.Objects[objKv.Key] = objKv.Value.ToDictionary(
-                        cycleKv => cycleKv.Key,
-                        cycleKv => cycleKv.Value);
-                }
+                foreach (var obj in data.Objects)
+                    vm.Objects[obj.Key] = obj.Value.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
 
-                vm.ObjectNumbers.Clear();
-                foreach (var obj in vm.Objects.Keys.OrderBy(k => k))
-                    vm.ObjectNumbers.Add(obj);
-
-                vm.CycleNumbers.Clear();
-                if (vm.Objects.TryGetValue(vm.Header.ObjectNumber, out var cycles))
-                    foreach (var cyc in cycles.Keys.OrderBy(k => k))
-                        vm.CycleNumbers.Add(cyc);
+                vm.DrawingPath = dwgPath;
 
                 _currentPath = path;
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
+                System.Windows.MessageBox.Show(
                     $"Ошибка при загрузке проекта:\n{ex.Message}",
                     "Ошибка",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error
+                );
             }
         }
+
+
 
         private void OpenProject()
         {
@@ -216,7 +229,7 @@ namespace Osadka.ViewModels
             _currentPath = dlg.FileName;
         }
 
-        private void SaveTo(string path)
+        void SaveTo(string path)
         {
             if (RawVM is not { } vm) return;
 
@@ -230,7 +243,6 @@ namespace Osadka.ViewModels
                 SelectedCycleHeader = vm.SelectedCycleHeader,
                 DataRows = vm.DataRows.ToList(),
                 CoordRows = vm.CoordRows.ToList(),
-
                 Objects = vm.Objects.ToDictionary(
                     objKv => objKv.Key,
                     objKv => objKv.Value.ToDictionary(
@@ -239,10 +251,127 @@ namespace Osadka.ViewModels
                     ))
             };
 
+<<<<<<< Updated upstream
             var json = JsonSerializer.Serialize(
                 data,
                 new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(path, json);
+=======
+            // ВАЖНО: JsonSerializer из System.Text.Json, а не из .Nodes
+            var node = System.Text.Json.JsonSerializer.SerializeToNode(data)!.AsObject();
+            node["DwgPath"] = vm.DrawingPath;
+
+            System.IO.File.WriteAllText(
+                path,
+                node.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true })
+            );
+            ResetDirty();
+        }
+
+
+
+        private void SubscribeMeasurementRow(MeasurementRow? row)
+        {
+            if (row is null) return;
+            if (_trackedMeasurementRows.Add(row))
+            {
+                row.PropertyChanged += MeasurementRow_PropertyChanged;
+            }
+        }
+
+        private void UnsubscribeMeasurementRow(MeasurementRow? row)
+        {
+            if (row is null) return;
+            if (_trackedMeasurementRows.Remove(row))
+            {
+                row.PropertyChanged -= MeasurementRow_PropertyChanged;
+            }
+        }
+
+        private void SubscribeCoordRow(CoordRow? row)
+        {
+            if (row is null) return;
+            if (_trackedCoordRows.Add(row))
+            {
+                row.PropertyChanged += CoordRow_PropertyChanged;
+            }
+        }
+
+        private void UnsubscribeCoordRow(CoordRow? row)
+        {
+            if (row is null) return;
+            if (_trackedCoordRows.Remove(row))
+            {
+                row.PropertyChanged -= CoordRow_PropertyChanged;
+            }
+        }
+
+        private void DataRows_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                ClearMeasurementRowSubscriptions();
+                foreach (var row in RawVM.DataRows)
+                    SubscribeMeasurementRow(row);
+            }
+            else
+            {
+                if (e.OldItems != null)
+                    foreach (MeasurementRow row in e.OldItems)
+                        UnsubscribeMeasurementRow(row);
+
+                if (e.NewItems != null)
+                    foreach (MeasurementRow row in e.NewItems)
+                        SubscribeMeasurementRow(row);
+            }
+
+            MarkDirty();
+        }
+
+        private void CoordRows_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                ClearCoordRowSubscriptions();
+                foreach (var row in RawVM.CoordRows)
+                    SubscribeCoordRow(row);
+            }
+            else
+            {
+                if (e.OldItems != null)
+                    foreach (CoordRow row in e.OldItems)
+                        UnsubscribeCoordRow(row);
+
+                if (e.NewItems != null)
+                    foreach (CoordRow row in e.NewItems)
+                        SubscribeCoordRow(row);
+            }
+
+            MarkDirty();
+        }
+
+        private void MeasurementRow_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+            => MarkDirty();
+
+        private void CoordRow_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+            => MarkDirty();
+
+        private void Header_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+     => MarkDirty();
+
+        private void ClearMeasurementRowSubscriptions()
+        {
+            foreach (var row in _trackedMeasurementRows.ToList())
+                row.PropertyChanged -= MeasurementRow_PropertyChanged;
+            _trackedMeasurementRows.Clear();
+        }
+
+        private void ClearCoordRowSubscriptions()
+        {
+            foreach (var row in _trackedCoordRows.ToList())
+                row.PropertyChanged -= CoordRow_PropertyChanged;
+            _trackedCoordRows.Clear();
+>>>>>>> Stashed changes
         }
 
         private void DoQuickExport()
@@ -678,19 +807,31 @@ namespace Osadka.ViewModels
                          ?? new System.Collections.Generic.List<int>();
 
             var dynVm = new DynamicsGrafficViewModel(RawVM, _dynSvc);
-
+            var used = new Dictionary<string, int>(StringComparer.CurrentCultureIgnoreCase);
+            string Unique(string h)
+            {
+                if (string.IsNullOrWhiteSpace(h)) h = "Cycle";
+                if (used.TryGetValue(h, out var n))
+                {
+                    n++;
+                    used[h] = n;
+                    return $"{h} #{n}";
+                }
+                used[h] = 1;
+                return h;
+            }
             ws.Cell(1, 1).Value = "Id";
             for (int i = 0; i < cycles.Count; i++)
             {
                 int cyc = cycles[i];
-
                 string headerText;
                 if (RawVM.CycleHeaders.TryGetValue(cyc, out var rawLabel))
                     headerText = CycleLabelParsing.ExtractDateTail(rawLabel) ?? rawLabel;
                 else
                     headerText = $"Cycle {cyc}";
 
-                ws.Cell(1, i + 2).Value = headerText;
+                // NEW: исключаем дубликаты
+                ws.Cell(1, i + 2).Value = Unique(headerText.Trim());
             }
 
             var colByCycle = cycles

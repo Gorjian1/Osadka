@@ -9,6 +9,7 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <conv:AddOneConverter x:Key="AddOne"/>
+        <conv:IndexToMarkLabelConverter x:Key="IndexToMark"/>
     </UserControl.Resources>
 
     <Grid>
@@ -126,11 +127,19 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock>
-                        <Run Text="№ "/>
-                        <Run Text="{Binding RelativeSource={RelativeSource AncestorType=FrameworkElement},
-                                            Path=(ItemsControl.AlternationIndex),
-                                            Converter={StaticResource AddOne}}"/>
-                        <Run Text=": "/>
+<Run Text="№ "/>
+<Run>
+    <Run.Text>
+        <MultiBinding Converter="{StaticResource IndexToMark}">
+            <Binding RelativeSource="{RelativeSource AncestorType=FrameworkElement}"
+                     Path="(ItemsControl.AlternationIndex)"/>
+            <Binding RelativeSource="{RelativeSource AncestorType=UserControl}"
+                     Path="DataContext"/>
+        </MultiBinding>
+    </Run.Text>
+</Run>
+<Run Text=": "/>
+
                         <Run Text="{Binding X, StringFormat=F3}"/>
                         <Run Text=" ; "/>
                         <Run Text="{Binding Y, StringFormat=F3}"/>

@@ -30,27 +30,27 @@ namespace Osadka.Views
 
         private void SetupToolbarSorting(RawDataViewModel vm)
         {
-            // ObjectNumbers — ObservableCollection<int>
+            // Объекты — по возрастанию
             var viewObjects = CollectionViewSource.GetDefaultView(vm.ObjectNumbers);
             if (viewObjects != null)
             {
                 viewObjects.SortDescriptions.Clear();
-                // Пустое имя свойства — сортировка по самому элементу (int)
                 viewObjects.SortDescriptions.Add(new SortDescription(string.Empty, ListSortDirection.Ascending));
             }
 
-            // CycleNumbers — ObservableCollection<int>
-            var viewCycles = CollectionViewSource.GetDefaultView(vm.CycleNumbers);
+            // Циклы — по Number убыванию (правый = самый поздний)
+            var viewCycles = CollectionViewSource.GetDefaultView(vm.CycleItems);
             if (viewCycles != null)
             {
                 viewCycles.SortDescriptions.Clear();
-                viewCycles.SortDescriptions.Add(new SortDescription(string.Empty, ListSortDirection.Descending));
+                viewCycles.SortDescriptions.Add(new SortDescription(nameof(RawDataViewModel.CycleDisplayItem.Number),
+                                                                   ListSortDirection.Descending));
             }
 
-            // На случай динамических изменений коллекций — обновляем вьюхи при изменениях
             vm.ObjectNumbers.CollectionChanged += (_, __) => viewObjects?.Refresh();
-            vm.CycleNumbers.CollectionChanged += (_, __) => viewCycles?.Refresh();
+            vm.CycleItems.CollectionChanged += (_, __) => viewCycles?.Refresh();
         }
+
 
         // Разрешаем: пусто | "-" | "-12" | "12" | "12." | "12.3" | ".5" | ",5"
         private static readonly Regex _numericPattern = new(@"^\s*-?\d*(?:[.,]\d*)?\s*$", RegexOptions.Compiled);
