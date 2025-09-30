@@ -1,4 +1,16 @@
 ﻿// File: ViewModels/MainViewModel.cs
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using System.Windows;
 using ClosedXML.Excel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -6,22 +18,6 @@ using Microsoft.Win32;
 using Osadka.Models;
 using Osadka.Services;
 using Osadka.Views;
-<<<<<<< Updated upstream
-=======
-using System.Text.Json.Nodes;
-using System.Collections.Generic;
-using System.Collections.Specialized;
-using System.ComponentModel;
->>>>>>> Stashed changes
-using System.Diagnostics;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using ClosedXML.Excel;
-using System.Runtime.InteropServices;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using System.Windows;
 using Telegram.Bot.Types;
 
 namespace Osadka.ViewModels
@@ -42,7 +38,12 @@ namespace Osadka.ViewModels
         public IRelayCommand SaveProjectCommand { get; }
         public IRelayCommand SaveAsProjectCommand { get; }
         public IRelayCommand QuickReportCommand { get; }
+        public IRelayCommand PasteProxyCommand { get; }
         private CoordinateExporting? _coord;
+
+        private readonly HashSet<MeasurementRow> _trackedMeasurementRows = new();
+        private readonly HashSet<CoordRow> _trackedCoordRows = new();
+        private bool _isDirty;
 
         private object? _currentPage;
         private bool _includeGeneral = true;
@@ -108,6 +109,15 @@ namespace Osadka.ViewModels
                 }
             };
 
+            RawVM.Header.PropertyChanged += Header_PropertyChanged;
+            RawVM.DataRows.CollectionChanged += DataRows_CollectionChanged;
+            RawVM.CoordRows.CollectionChanged += CoordRows_CollectionChanged;
+
+            foreach (var row in RawVM.DataRows)
+                SubscribeMeasurementRow(row);
+            foreach (var row in RawVM.CoordRows)
+                SubscribeCoordRow(row);
+
             var genSvc = new GeneralReportService();
             var relSvc = new RelativeReportService();
 
@@ -119,9 +129,27 @@ namespace Osadka.ViewModels
             NavigateCommand = new RelayCommand<string>(Navigate);
             NewProjectCommand = new RelayCommand(NewProject);
             OpenProjectCommand = new RelayCommand(OpenProject);
-            SaveProjectCommand = new RelayCommand(SaveProject);
+            SaveProjectCommand = new RelayCommand(SaveProject, () => _isDirty);
             SaveAsProjectCommand = new RelayCommand(SaveAsProject);
             QuickReportCommand = new RelayCommand(DoQuickExport, () => GenVM.Report != null);
+            PasteProxyCommand = new RelayCommand(
+                () => RawVM.PasteCommand.Execute(null),
+                () => RawVM.PasteCommand.CanExecute(null));
+
+            RawVM.PasteCommand.CanExecuteChanged += (_, _) =>
+            {
+                if (PasteProxyCommand is RelayCommand pasteRelay)
+                    pasteRelay.NotifyCanExecuteChanged();
+            };
+
+            GenVM.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(GeneralReportViewModel.Report) &&
+                    QuickReportCommand is RelayCommand quickRelay)
+                {
+                    quickRelay.NotifyCanExecuteChanged();
+                }
+            };
 
             Navigate(PageKeys.Raw);
         }
@@ -147,6 +175,7 @@ namespace Osadka.ViewModels
         {
             RawVM.ClearCommand.Execute(null);
             _currentPath = null;
+            ResetDirty();
         }
 
         public void LoadProject(string path)
@@ -183,6 +212,7 @@ namespace Osadka.ViewModels
                 vm.DrawingPath = dwgPath;
 
                 _currentPath = path;
+                ResetDirty();
             }
             catch (Exception ex)
             {
@@ -250,21 +280,14 @@ namespace Osadka.ViewModels
                         cycleKv => cycleKv.Value.ToList()
                     ))
             };
-
-<<<<<<< Updated upstream
-            var json = JsonSerializer.Serialize(
-                data,
-                new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(path, json);
-=======
-            // ВАЖНО: JsonSerializer из System.Text.Json, а не из .Nodes
-            var node = System.Text.Json.JsonSerializer.SerializeToNode(data)!.AsObject();
+            var node = JsonSerializer.SerializeToNode(data)!.AsObject();
             node["DwgPath"] = vm.DrawingPath;
 
-            System.IO.File.WriteAllText(
+            File.WriteAllText(
                 path,
-                node.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true })
+                node.ToJsonString(new JsonSerializerOptions { WriteIndented = true })
             );
+
             ResetDirty();
         }
 
@@ -357,7 +380,7 @@ namespace Osadka.ViewModels
             => MarkDirty();
 
         private void Header_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-     => MarkDirty();
+            => MarkDirty();
 
         private void ClearMeasurementRowSubscriptions()
         {
@@ -371,7 +394,30 @@ namespace Osadka.ViewModels
             foreach (var row in _trackedCoordRows.ToList())
                 row.PropertyChanged -= CoordRow_PropertyChanged;
             _trackedCoordRows.Clear();
->>>>>>> Stashed changes
+        }
+
+        private void MarkDirty()
+        {
+            if (_isDirty)
+                return;
+
+            _isDirty = true;
+            if (SaveProjectCommand is RelayCommand saveRelay)
+                saveRelay.NotifyCanExecuteChanged();
+        }
+
+        private void ResetDirty()
+        {
+            if (!_isDirty)
+            {
+                if (SaveProjectCommand is RelayCommand saveRelay)
+                    saveRelay.NotifyCanExecuteChanged();
+                return;
+            }
+
+            _isDirty = false;
+            if (SaveProjectCommand is RelayCommand relay)
+                relay.NotifyCanExecuteChanged();
         }
 
         private void DoQuickExport()
