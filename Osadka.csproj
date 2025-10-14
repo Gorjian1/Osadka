@@ -54,6 +54,9 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="UI\Controls\" />
+  </ItemGroup>
   <Target Name="SquirrelReleasify" AfterTargets="Publish">
     <Message Text="→ Squirrel: releasify $(PublishDir)Osadka.exe → $(SquirrelReleaseDir)" Importance="high" />
   </Target>

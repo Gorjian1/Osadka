@@ -66,13 +66,14 @@
         <!-- Drawing area -->
         <Grid Grid.Row="1" Background="White">
             <ScrollViewer x:Name="Viewport"
-                          HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Auto"
-                          PreviewMouseWheel="ImageWheel"
-                          PreviewMouseRightButtonDown="Viewport_RightDown"
-                          PreviewMouseMove="Viewport_Move"
-                          PreviewMouseRightButtonUp="Viewport_RightUp"
-                          PreviewMouseLeftButtonDown="Viewport_LeftDown">
+              HorizontalScrollBarVisibility="Auto"
+              VerticalScrollBarVisibility="Auto"
+              PanningMode="None"
+              PreviewMouseWheel="ImageWheel"
+              PreviewMouseRightButtonDown="Viewport_RightDown"
+              PreviewMouseMove="Viewport_Move"
+              PreviewMouseRightButtonUp="Viewport_RightUp"
+              PreviewMouseLeftButtonDown="Viewport_LeftDown">
                 <Grid RenderTransformOrigin="0,0">
                     <Grid.LayoutTransform>
                         <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}"/>
@@ -108,7 +109,12 @@
                     </ItemsControl>
 
                     <!-- Overlay for crosses and ruler -->
-                    <Canvas x:Name="OverlayCanvas" IsHitTestVisible="False"/>
+                    <Canvas x:Name="OverlayCanvas"         IsHitTestVisible="False"
+        Width="{Binding ActualWidth, ElementName=ImageHost}"
+        Height="{Binding ActualHeight, ElementName=ImageHost}"
+        SnapsToDevicePixels="True"
+        UseLayoutRounding="True"
+        ClipToBounds="True"/>
                 </Grid>
             </ScrollViewer>
 
@@ -131,8 +137,8 @@
 <Run>
     <Run.Text>
         <MultiBinding Converter="{StaticResource IndexToMark}">
-            <Binding RelativeSource="{RelativeSource AncestorType=FrameworkElement}"
-                     Path="(ItemsControl.AlternationIndex)"/>
+<Binding RelativeSource="{RelativeSource AncestorType=ContentPresenter}"
+         Path="(ItemsControl.AlternationIndex)"/>
             <Binding RelativeSource="{RelativeSource AncestorType=UserControl}"
                      Path="DataContext"/>
         </MultiBinding>

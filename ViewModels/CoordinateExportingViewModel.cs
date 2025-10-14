@@ -553,13 +553,15 @@ namespace Osadka.ViewModels
 
         private void SendToData()
         {
-            var scaled = SelectedPoints
+            var raw = SelectedPoints
                 .Select(p => new System.Windows.Point(
-                    Math.Round(p.X * _raw.CoordScale, 2),
-                    Math.Round(p.Y * _raw.CoordScale, 2)))
+                    Math.Round(p.X, 2),
+                    Math.Round(p.Y, 2)))
                 .ToList();
 
-            WeakReferenceMessenger.Default.Send(new CoordinatesMessage(scaled));
+            WeakReferenceMessenger.Default.Send(new CoordinatesMessage(raw));
         }
+
+
     }
 }

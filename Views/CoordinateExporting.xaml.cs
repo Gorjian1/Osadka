@@ -195,9 +195,20 @@ namespace Osadka.Views
         {
             if (_panning)
             {
-                var cur = e.GetPosition(Viewport);
+                // Если кнопку отпустили вне вьюпорта — корректно завершаем пан
+                if (e.RightButton != MouseButtonState.Pressed)
+                {
+                    _panning = false;
+                    Viewport.ReleaseMouseCapture();
+                    Viewport.Cursor = Cursors.Arrow;
+                    e.Handled = true;
+                    return;
+                }
+
+                var cur = e.GetPosition(Viewport);             // важно: координаты ВЬЮПОРТА
                 Viewport.ScrollToHorizontalOffset(_hStart - (cur.X - _panStart.X));
                 Viewport.ScrollToVerticalOffset(_vStart - (cur.Y - _panStart.Y));
+                e.Handled = true;                              // важно: не даём никому переиграть скролл
             }
 
             if (Vm.IsMeasureMode && _measureStart is WpfPoint p0)
@@ -219,7 +230,8 @@ namespace Osadka.Views
 
         private void Viewport_LeftDown(object s, MouseButtonEventArgs e)
         {
-            var p = e.GetPosition(ImageHost);
+            var p = e.GetPosition(OverlayCanvas);
+
 
             if (Vm.IsMeasureMode)
             {
@@ -326,13 +338,21 @@ namespace Osadka.Views
             Canvas.SetTop(_label, (p0.Y + p1.Y) / 2);
         }
 
+        // CoordinateExporting.xaml.cs
         private (double X, double Y) PxToCad(System.Windows.Point p)
         {
-            // учитываем зум (LayoutTransform масштабирует грид)
-            double s = Math.Max(Vm.EffectiveScale, 1e-9);
-            double dwgX = Vm.MinX + p.X / (Vm.PixelsPerUnit * s);
-            double dwgY = Vm.MaxY - p.Y / (Vm.PixelsPerUnit * s);
+            // LayoutTransform масштабирует визуал, НО координаты мыши уже в системе ImageHost.
+            // Поэтому делить на зум (EffectiveScale) не нужно.
+            double dwgX = Vm.MinX + p.X / Vm.PixelsPerUnit;
+            double dwgY = Vm.MaxY - p.Y / Vm.PixelsPerUnit;
             return (dwgX, dwgY);
+        }
+
+        private System.Windows.Point CadToPx(System.Windows.Point cad)
+        {
+            double px = (cad.X - Vm.MinX) * Vm.PixelsPerUnit;
+            double py = (Vm.MaxY - cad.Y) * Vm.PixelsPerUnit;
+            return new System.Windows.Point(px, py);
         }
 
 
