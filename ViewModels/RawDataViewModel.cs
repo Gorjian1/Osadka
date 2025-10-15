@@ -23,6 +23,9 @@ namespace Osadka.ViewModels
 {
     public partial class RawDataViewModel : ObservableObject
     {
+        private bool _suspendRefresh;
+        public void SuspendRefresh(bool on) => _suspendRefresh = on;
+
         // === Пользовательский шаблон ===
         [ObservableProperty] private string? templatePath;
         public bool HasCustomTemplate => !string.IsNullOrWhiteSpace(TemplatePath) && File.Exists(TemplatePath!);
@@ -151,12 +154,14 @@ namespace Osadka.ViewModels
 
         private void Header_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
+            if (_suspendRefresh) return;
             if (e.PropertyName == nameof(Header.CycleNumber) ||
                 e.PropertyName == nameof(Header.ObjectNumber))
             {
                 RefreshData();
             }
         }
+
 
         private void RefreshData()
         {

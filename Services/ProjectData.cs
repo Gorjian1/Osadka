@@ -12,6 +12,7 @@ namespace Osadka.Models
         public double? RelNomen { get; set; }
         public double? RelCalculated { get; set; }
         public string? SelectedCycleHeader { get; set; }
+        public int ObjectNumber { get; set; }   // <<< новое поле
 
         public List<MeasurementRow> DataRows { get; set; } = new();
         public List<CoordRow> CoordRows { get; set; } = new();
