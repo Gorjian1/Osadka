@@ -120,11 +120,51 @@
 
             <!-- Overlay: selected points list (top-right, under toolbar) -->
             <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,6,0"
-        Background="#CCFFFFFF" CornerRadius="6" Padding="6" IsHitTestVisible="False">
+                    Background="#CCFFFFFF" CornerRadius="6" Padding="6">
                 <StackPanel>
-                    <TextBlock Text="Выбранные точки" FontWeight="Bold" Margin="0,0,0,4"/>
+                    <DockPanel LastChildFill="False">
+                        <TextBlock Text="Выбранные точки" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <Button Command="{Binding ToggleSelectedPointsCmd}" Margin="8,0,0,0" Padding="6,2">
+                            <Grid>
+                                <TextBlock Text="Свернуть">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedPointsExpanded}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock Text="Развернуть">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedPointsExpanded}" Value="False">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                        </Button>
+                    </DockPanel>
                     <!-- Критично: AlternationCount и привязка к (ItemsControl.AlternationIndex) на контейнере -->
-                    <ItemsControl ItemsSource="{Binding SelectedPoints}" AlternationCount="2147483647">
+                    <ItemsControl ItemsSource="{Binding SelectedPoints}" AlternationCount="2147483647" Margin="0,4,0,0">
+                        <ItemsControl.Style>
+                            <Style TargetType="ItemsControl">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedPointsExpanded}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ItemsControl.Style>
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <StackPanel/>

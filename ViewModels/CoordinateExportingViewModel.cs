@@ -43,6 +43,7 @@ namespace Osadka.ViewModels
             ToggleSelectCmd = new RelayCommand(() => { IsSelectMode = !IsSelectMode; if (IsSelectMode) IsMeasureMode = false; if (!IsSelectMode) SelectedPoints.Clear(); });
             ExportCoordsCmd = new RelayCommand(ExportCoords);
             SendToDataCmd = new RelayCommand(SendToData);
+            ToggleSelectedPointsCmd = new RelayCommand(() => SelectedPointsExpanded = !SelectedPointsExpanded);
         }
 
         partial void OnGridStepChanged(double value)
@@ -60,6 +61,8 @@ namespace Osadka.ViewModels
         public CadDocument Doc { get; private set; }
 
         public ObservableCollection<WpfPoint> SelectedPoints { get; } = new();
+        [ObservableProperty]
+        private bool selectedPointsExpanded = true;
         public ObservableCollection<PointCollection> Contours { get; } = new();
 
         private double _zoomFactor = 1.0;
@@ -127,6 +130,7 @@ namespace Osadka.ViewModels
         public IRelayCommand ToggleSelectCmd { get; }
         public IRelayCommand ExportCoordsCmd { get; }
         public IRelayCommand SendToDataCmd { get; }
+        public IRelayCommand ToggleSelectedPointsCmd { get; }
 
         private readonly Dictionary<string, List<(Geometry geo, WpfBrush brush)>> _layerCache = new();
         private readonly List<(string layer, string text, double x, double y, double height, WpfBrush brush)> _textCache = new();
