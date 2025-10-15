@@ -77,7 +77,12 @@ namespace Osadka.ViewModels
                 p.X *= k;
                 p.Y *= k;
             }
-
+               foreach (var r in DataRows)
+                   {
+                       if (r.Mark is double m) r.Mark = m * k;
+                       if (r.Settl is double s) r.Settl = s * k;
+                       if (r.Total is double t) r.Total = t * k;
+                   }
             // Держим SourceUnit согласованным с CoordUnit
             SourceUnit = newU;
         }
@@ -555,7 +560,9 @@ namespace Osadka.ViewModels
                             var (mark, markRaw) = ParseCell(sheet.Cell(r, startCol));
                             var (settl, settlRaw) = ParseCell(sheet.Cell(r, startCol + 1));
                             var (total, totalRaw) = ParseCell(sheet.Cell(r, startCol + 2));
-
+                            if (mark.HasValue) mark = UnitConverter.ToMm(mark.Value, Map(coordUnit));
+                            if (settl.HasValue) settl = UnitConverter.ToMm(settl.Value, Map(coordUnit));
+                            if (total.HasValue) total = UnitConverter.ToMm(total.Value, Map(coordUnit));
                             if (mark is null && settl is null && total is null &&
                                 string.IsNullOrWhiteSpace(markRaw) && string.IsNullOrWhiteSpace(settlRaw) && string.IsNullOrWhiteSpace(totalRaw))
                             {
