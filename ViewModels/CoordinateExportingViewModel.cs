@@ -6,8 +6,12 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Win32;
 using Osadka.Messages;
+using Osadka.Models;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -21,7 +25,6 @@ using CadPolyline = ACadSharp.Entities.LwPolyline;
 using CadText = ACadSharp.Entities.TextEntity;
 using CadColor = ACadSharp.Color;
 using CadLayer = ACadSharp.Tables.Layer;
-using WpfPoint = System.Windows.Point;
 using WpfColor = System.Windows.Media.Color;
 using WpfBrush = System.Windows.Media.Brush;
 using WpfSolidColorBrush = System.Windows.Media.SolidColorBrush;
@@ -38,12 +41,65 @@ namespace Osadka.ViewModels
         {
             _raw = raw;
 
+            _raw.DataRows.CollectionChanged += RawDataRowsChanged;
+            foreach (var row in _raw.DataRows)
+            {
+                AttachRow(row);
+            }
+
             OpenDwgCommand = new RelayCommand(OpenDwg);
             ToggleMeasureCmd = new RelayCommand(() => { IsMeasureMode = !IsMeasureMode; if (IsMeasureMode) IsSelectMode = false; });
-            ToggleSelectCmd = new RelayCommand(() => { IsSelectMode = !IsSelectMode; if (IsSelectMode) IsMeasureMode = false; if (!IsSelectMode) SelectedPoints.Clear(); });
+            ToggleSelectCmd = new RelayCommand(() =>
+            {
+                IsSelectMode = !IsSelectMode;
+                if (IsSelectMode)
+                {
+                    IsMeasureMode = false;
+                }
+                else
+                {
+                    ClearSelectedPoints();
+                }
+            });
             ExportCoordsCmd = new RelayCommand(ExportCoords);
             SendToDataCmd = new RelayCommand(SendToData);
             ToggleSelectedPointsCmd = new RelayCommand(() => SelectedPointsExpanded = !SelectedPointsExpanded);
+        }
+
+        private void RawDataRowsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                foreach (var row in _trackedRows.ToList())
+                {
+                    DetachRow(row);
+                }
+
+                foreach (var row in _raw.DataRows)
+                {
+                    AttachRow(row);
+                }
+            }
+            else
+            {
+                if (e.OldItems != null)
+                {
+                    foreach (var item in e.OldItems)
+                    {
+                        DetachRow(item as MeasurementRow);
+                    }
+                }
+
+                if (e.NewItems != null)
+                {
+                    foreach (var item in e.NewItems)
+                    {
+                        AttachRow(item as MeasurementRow);
+                    }
+                }
+            }
+
+            RefreshSelectedPointLabels();
         }
 
         partial void OnGridStepChanged(double value)
@@ -60,10 +116,112 @@ namespace Osadka.ViewModels
 
         public CadDocument Doc { get; private set; }
 
-        public ObservableCollection<WpfPoint> SelectedPoints { get; } = new();
+        public partial class SelectedPointEntry : ObservableObject
+        {
+            public SelectedPointEntry(double x, double y, string label)
+            {
+                this.x = x;
+                this.y = y;
+                this.label = label;
+            }
+
+            [ObservableProperty] private double x;
+            [ObservableProperty] private double y;
+            [ObservableProperty] private string label;
+        }
+
+        public ObservableCollection<SelectedPointEntry> SelectedPoints { get; } = new();
+        private readonly HashSet<MeasurementRow> _trackedRows = new();
         [ObservableProperty]
         private bool selectedPointsExpanded = true;
         public ObservableCollection<PointCollection> Contours { get; } = new();
+
+        private void AttachRow(MeasurementRow? row)
+        {
+            if (row == null)
+            {
+                return;
+            }
+
+            if (_trackedRows.Add(row))
+            {
+                row.PropertyChanged += DataRow_PropertyChanged;
+            }
+        }
+
+        private void DetachRow(MeasurementRow? row)
+        {
+            if (row == null)
+            {
+                return;
+            }
+
+            if (_trackedRows.Remove(row))
+            {
+                row.PropertyChanged -= DataRow_PropertyChanged;
+            }
+        }
+
+        private void DataRow_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(MeasurementRow.Id))
+            {
+                RefreshSelectedPointLabels();
+            }
+        }
+
+        public void AddSelectedPoint(double x, double y)
+        {
+            SelectedPoints.Add(new SelectedPointEntry(x, y, ComputeLabelForIndex(SelectedPoints.Count)));
+        }
+
+        public void ClearSelectedPoints()
+        {
+            SelectedPoints.Clear();
+        }
+
+        public bool RemoveLastSelectedPoint()
+        {
+            if (SelectedPoints.Count == 0)
+            {
+                return false;
+            }
+
+            SelectedPoints.RemoveAt(SelectedPoints.Count - 1);
+            return true;
+        }
+
+        private void RefreshSelectedPointLabels()
+        {
+            for (int i = 0; i < SelectedPoints.Count; i++)
+            {
+                var desired = ComputeLabelForIndex(i);
+                if (SelectedPoints[i].Label != desired)
+                {
+                    SelectedPoints[i].Label = desired;
+                }
+            }
+        }
+
+        private string ComputeLabelForIndex(int index)
+        {
+            if (index >= 0 && index < _raw.DataRows.Count)
+            {
+                var id = _raw.DataRows[index].Id;
+                if (!string.IsNullOrWhiteSpace(id))
+                {
+                    var normalized = id.Trim();
+                    if (normalized.StartsWith("№", StringComparison.Ordinal))
+                    {
+                        normalized = normalized.TrimStart('№').Trim();
+                    }
+
+                    return normalized;
+                }
+            }
+
+            return (index + 1).ToString();
+        }
 
         private double _zoomFactor = 1.0;
         public double ZoomFactor

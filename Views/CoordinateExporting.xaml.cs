@@ -158,7 +158,7 @@ namespace Osadka.Views
             OverlayCanvas.Children.Clear();
             OverlayCanvas.Children.Add(_ruler);
             OverlayCanvas.Children.Add(_label);
-            Vm.SelectedPoints.Clear();
+            Vm.ClearSelectedPoints();
             _crossStack.Clear();
         }
 
@@ -240,7 +240,7 @@ namespace Osadka.Views
             else if (Vm.IsSelectMode)
             {
                 var cad = PxToCad(p);
-                Vm.SelectedPoints.Add(new System.Windows.Point(cad.X, cad.Y));
+                Vm.AddSelectedPoint(cad.X, cad.Y);
 
                 // ВАЖНО: Canvas внутри того же Grid, который масштабируется LayoutTransform,
                 // поэтому здесь НЕ умножаем на EffectiveScale
@@ -271,9 +271,8 @@ namespace Osadka.Views
 
         private void UndoLastPoint()
         {
-            if (Vm.SelectedPoints.Count > 0)
+            if (Vm.RemoveLastSelectedPoint())
             {
-                Vm.SelectedPoints.RemoveAt(Vm.SelectedPoints.Count - 1);
                 if (_crossStack.Count > 0)
                 {
                     var last = _crossStack.Pop();

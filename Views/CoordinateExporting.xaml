@@ -3,13 +3,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:conv="clr-namespace:Osadka.Converters"
              mc:Ignorable="d"
              KeyDown="UserControl_KeyDown">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
-        <conv:AddOneConverter x:Key="AddOne"/>
-        <conv:IndexToMarkLabelConverter x:Key="IndexToMark"/>
+        
     </UserControl.Resources>
 
     <Grid>
@@ -153,8 +151,8 @@
                             </Grid>
                         </Button>
                     </DockPanel>
-                    <!-- Критично: AlternationCount и привязка к (ItemsControl.AlternationIndex) на контейнере -->
-                    <ItemsControl ItemsSource="{Binding SelectedPoints}" AlternationCount="2147483647" Margin="0,4,0,0">
+                    <!-- Список выбранных точек: подписи теперь приходят из VM -->
+                    <ItemsControl ItemsSource="{Binding SelectedPoints}" Margin="0,4,0,0">
                         <ItemsControl.Style>
                             <Style TargetType="ItemsControl">
                                 <Setter Property="Visibility" Value="Collapsed"/>
@@ -173,22 +171,13 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock>
-<Run Text="№ "/>
-<Run>
-    <Run.Text>
-        <MultiBinding Converter="{StaticResource IndexToMark}">
-<Binding RelativeSource="{RelativeSource AncestorType=ContentPresenter}"
-         Path="(ItemsControl.AlternationIndex)"/>
-            <Binding RelativeSource="{RelativeSource AncestorType=UserControl}"
-                     Path="DataContext"/>
-        </MultiBinding>
-    </Run.Text>
-</Run>
-<Run Text=": "/>
+                                    <Run Text="№ "/>
+                                    <Run Text="{Binding Label}"/>
+                                    <Run Text=": "/>
 
-                        <Run Text="{Binding X, StringFormat=F3}"/>
-                        <Run Text=" ; "/>
-                        <Run Text="{Binding Y, StringFormat=F3}"/>
+                                    <Run Text="{Binding X, StringFormat=F3}"/>
+                                    <Run Text=" ; "/>
+                                    <Run Text="{Binding Y, StringFormat=F3}"/>
                                 </TextBlock>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
