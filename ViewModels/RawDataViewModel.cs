@@ -68,26 +68,11 @@ namespace Osadka.ViewModels
         [ObservableProperty]
         private CoordUnits coordUnit = CoordUnits.Millimeters;
 
-        // Преобразование старых значений в новые через отношение масштабов
         partial void OnCoordUnitChanged(CoordUnits oldVal, CoordUnits newVal)
         {
-            var oldU = Map(oldVal);
-            var newU = Map(newVal);
-            double k = UnitConverter.ToMm(1.0, newU) / UnitConverter.ToMm(1.0, oldU);
-
-            foreach (var p in CoordRows)
-            {
-                p.X *= k;
-                p.Y *= k;
-            }
-               foreach (var r in DataRows)
-                   {
-                       if (r.Mark is double m) r.Mark = m * k;
-                       if (r.Settl is double s) r.Settl = s * k;
-                       if (r.Total is double t) r.Total = t * k;
-                   }
-            // Держим SourceUnit согласованным с CoordUnit
-            SourceUnit = newU;
+            // При переключении отображения не трогаем уже сохранённые в мм данные.
+            // Держим SourceUnit согласованным с CoordUnit для последующего ввода.
+            SourceUnit = Map(newVal);
         }
 
         // Удобные аксессоры
