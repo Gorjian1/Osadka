@@ -114,6 +114,7 @@
             <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
             <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Tag" Value="6"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type Button}">
@@ -121,7 +122,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6"
+                                CornerRadius="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"
@@ -146,13 +147,129 @@
             </Setter>
         </Style>
 
+        <Style x:Key="ToolbarTemplateMainButton" TargetType="{x:Type Button}" BasedOn="{StaticResource ToolbarAccentButton}">
+            <Setter Property="Tag" Value="6,0,0,6"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Padding" Value="12,5"/>
+            <Setter Property="Content" Value="Выбрать шаблон"/>
+            <Style.Resources>
+                <SolidColorBrush x:Key="AccentBrush" Color="#FFA3CEF6"/>
+                <SolidColorBrush x:Key="AccentBrushHover" Color="#FF89B6E6"/>
+                <SolidColorBrush x:Key="AccentBrushPressed" Color="#FF4E88C9"/>
+            </Style.Resources>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasCustomTemplate}" Value="True">
+                    <Setter Property="Content" Value="Открыть шаблон"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ToolbarTemplateClearButton" TargetType="{x:Type Button}" BasedOn="{StaticResource ToolbarAccentButton}">
+            <Setter Property="Tag" Value="0,6,6,0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Width" Value="36"/>
+        </Style>
+
         <Style x:Key="ToolbarLabel" TargetType="{x:Type TextBlock}">
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="0,0,6,0"/>
         </Style>
         <Style x:Key="ToolbarBox" TargetType="{x:Type ComboBox}">
-            <Setter Property="Width" Value="120"/>
+            <Setter Property="MinWidth" Value="120"/>
             <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Padding" Value="10,4,32,4"/>
+            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBox}">
+                        <Grid x:Name="TemplateRoot" SnapsToDevicePixels="True">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Border x:Name="Border"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="6"/>
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              IsHitTestVisible="False"
+                                              RecognizesAccessKey="True"/>
+                            <ToggleButton x:Name="ToggleButton"
+                                          Focusable="False"
+                                          Background="Transparent"
+                                          BorderBrush="{x:Null}"
+                                          BorderThickness="0"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          ClickMode="Press"
+                                          HorizontalAlignment="Right"
+                                          Width="28"
+                                          Margin="0">
+                                <Grid>
+                                    <Path x:Name="Arrow"
+                                          Data="M 0 0 L 4 4 L 8 0 Z"
+                                          Width="8"
+                                          Height="4"
+                                          Stretch="Uniform"
+                                          Fill="Black"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                                </Grid>
+                            </ToggleButton>
+                            <Popup x:Name="PART_Popup"
+                                   PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                                   Placement="Bottom"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   PopupAnimation="Slide">
+                                <Border x:Name="DropDownBorder"
+                                        MinWidth="{Binding PlacementTarget.ActualWidth, RelativeSource={RelativeSource AncestorType=Popup}}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                        Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
+                                        BorderBrush="{DynamicResource {x:Static SystemColors.WindowFrameBrushKey}}"
+                                        BorderThickness="1"
+                                        CornerRadius="6"
+                                        SnapsToDevicePixels="True">
+                                    <ScrollViewer Margin="0"
+                                                  CanContentScroll="True"
+                                                  Focusable="False">
+                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter TargetName="DropDownBorder" Property="MinHeight" Value="0"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource AccentBrushPressed}"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{StaticResource AccentBrushHover}"/>
+                                <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource AccentBrushHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{StaticResource AccentBrushPressed}"/>
+                                <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource AccentBrushPressed}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Border" Property="Opacity" Value="0.5"/>
+                                <Setter TargetName="Arrow" Property="Fill" Value="#80000000"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style x:Key="ToolbarText" TargetType="{x:Type TextBox}">
             <Setter Property="Width" Value="140"/>
@@ -223,43 +340,36 @@
                                 Command="{Binding ClearCommand}"/>
                         <Separator Margin="8,0"/>
                         <!-- СПЛИТ-КНОПКА ШАБЛОНА -->
-                        <Grid Width="190" Height="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=ActualHeight, FallbackValue=24}">
+                        <Grid Margin="0,0,6,0">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="28"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
                             <!-- Левая часть: выбрать/открыть -->
                             <Button Grid.Column="0"
-        Command="{Binding ChooseOrOpenTemplateCommand}"
-        ToolTip="Если шаблон не выбран — выбрать файл. Если выбран — открыть его.">
-                                <Button.Style>
-                                    <Style TargetType="Button">
-                                        <Setter Property="Content" Value="Выбрать шаблон"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding HasCustomTemplate}" Value="True">
-                                                <Setter Property="Content" Value="Открыть шаблон"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Button.Style>
-                            </Button>
-
+                                    Style="{StaticResource ToolbarTemplateMainButton}"
+                                    Command="{Binding ChooseOrOpenTemplateCommand}"
+                                    ToolTip="Если шаблон не выбран — выбрать файл. Если выбран — открыть его."/>
 
                             <!-- Правая часть: корзина (очистить путь) -->
                             <Button Grid.Column="1"
-            Command="{Binding ClearTemplateCommand}"
-            IsEnabled="{Binding HasCustomTemplate}"
-            ToolTip="Очистить путь к пользовательскому шаблону">
+                                    Style="{StaticResource ToolbarTemplateClearButton}"
+                                    Command="{Binding ClearTemplateCommand}"
+                                    IsEnabled="{Binding HasCustomTemplate}"
+                                    ToolTip="Очистить путь к пользовательскому шаблону">
                                 <TextBlock FontFamily="Segoe MDL2 Assets"
-                   Text="&#xE74D;"
-                   FontSize="14"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"/>
+                                           Text="&#xE74D;"
+                                           FontSize="14"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
                             </Button>
-                            <Button Style="{StaticResource CircleIconButton}"
-        ToolTipService.ShowDuration="60000"
-        AutomationProperties.Name="Подсказка по тегам шаблона" Margin="40,0,-36,0" Grid.Column="1" Width="NaN">
+                            <Button Grid.Column="2"
+                                    Style="{StaticResource CircleIconButton}"
+                                    ToolTipService.ShowDuration="60000"
+                                    AutomationProperties.Name="Подсказка по тегам шаблона"
+                                    Margin="8,0,0,0">
                                 <TextBlock Text="!" FontWeight="Bold" FontSize="14"
                VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                 <Button.ToolTip>
@@ -326,13 +436,12 @@
                         <!-- Цикл № -->
                         <TextBlock Style="{StaticResource ToolbarLabel}" Text="Цикл №"/>
                         <!-- Циклы -->
-                        <ComboBox
-    ItemsSource="{Binding CycleItems}"
-    SelectedValue="{Binding Header.CycleNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-    SelectedValuePath="Number"
-    DisplayMemberPath="Label"
-    MinWidth="140"
-    Width="80"/>
+                        <ComboBox Style="{StaticResource ToolbarBox}"
+                                  ItemsSource="{Binding CycleItems}"
+                                  SelectedValue="{Binding Header.CycleNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  SelectedValuePath="Number"
+                                  DisplayMemberPath="Label"
+                                  MinWidth="140"/>
 
 
 
