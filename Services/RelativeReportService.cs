@@ -28,7 +28,7 @@ namespace Osadka.Services
             double limitSp,
             double limitCalc)
         {
-            // НИКАКОЙ фильтрации по Total — пары строим строго по индексам!
+            // Пары строим строго по индексам; точки без измерений просто пропускаем при расчёте
             var points = coordsAligned.Zip(rows, (c, r) => (Coord: c, Row: r)).ToList();
 
             int n = points.Count;
@@ -36,10 +36,15 @@ namespace Osadka.Services
 
             for (int i = 0; i < n; i++)
             {
+                var (c1, r1) = points[i];
+                if (!TryGetValidTotal(r1, out double t1))
+                    continue;
+
                 for (int j = i + 1; j < n; j++)
                 {
-                    var (c1, r1) = points[i];
                     var (c2, r2) = points[j];
+                    if (!TryGetValidTotal(r2, out double t2))
+                        continue;
 
                     // Дистанция — только если у обеих точек валидные координаты
                     double dist;
@@ -55,16 +60,7 @@ namespace Osadka.Services
                     }
 
                     // ΔS — только если оба Total заданы
-                    double dS;
-                    if (r1.Total is double t1 && IsFinite(t1) &&
-                        r2.Total is double t2 && IsFinite(t2))
-                    {
-                        dS = t2 - t1;
-                    }
-                    else
-                    {
-                        dS = double.NaN;
-                    }
+                    double dS = t2 - t1;
 
                     // Относительная — только при валидных dist и dS
                     double ratio = (IsFinite(dist) && dist > 0 && IsFinite(dS))
@@ -105,6 +101,23 @@ namespace Osadka.Services
         }
 
         private static bool IsFinite(double v) => !double.IsNaN(v) && !double.IsInfinity(v);
+
+        private static bool TryGetValidTotal(MeasurementRow row, out double total)
+        {
+            total = double.NaN;
+
+            if (row is null)
+                return false;
+
+            if (row.Mark is not double mark || !IsFinite(mark))
+                return false;
+
+            if (row.Total is not double t || !IsFinite(t))
+                return false;
+
+            total = t;
+            return true;
+        }
 
         private static double RoundOrNaN(double v, int digits)
             => IsFinite(v) ? Math.Round(v, digits) : double.NaN;
