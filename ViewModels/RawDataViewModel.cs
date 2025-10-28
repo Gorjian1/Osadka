@@ -17,6 +17,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Windows;
 
 namespace Osadka.ViewModels
@@ -411,7 +412,7 @@ namespace Osadka.ViewModels
 
             try
             {
-                using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var stream = OpenWorkbookStream(filePath);
                 using var wb = new XLWorkbook(stream);
 
                 var dlg = new Osadka.Views.ImportSelectionWindow(wb)
@@ -635,6 +636,36 @@ namespace Osadka.ViewModels
 
                 return string.Empty;
             }
+        }
+
+        private static FileStream OpenWorkbookStream(string filePath)
+        {
+            var shareModes = new[]
+            {
+                FileShare.ReadWrite | FileShare.Delete,
+                FileShare.ReadWrite,
+                FileShare.Read
+            };
+
+            IOException? lastError = null;
+            foreach (var share in shareModes)
+            {
+                for (int attempt = 0; attempt < 3; attempt++)
+                {
+                    try
+                    {
+                        return new FileStream(filePath, FileMode.Open, FileAccess.Read, share);
+                    }
+                    catch (IOException ex)
+                    {
+                        lastError = ex;
+                        if (attempt < 2)
+                            Thread.Sleep(100);
+                    }
+                }
+            }
+
+            throw lastError ?? new IOException($"Не удалось открыть файл '{filePath}'.");
         }
 
         private static (double? val, string raw) ParseCell(IXLCell cell)
