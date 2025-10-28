@@ -16,6 +16,8 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows;
 
@@ -411,81 +413,119 @@ namespace Osadka.ViewModels
 
             try
             {
-                using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                using var wb = new XLWorkbook(stream);
-
-                var dlg = new Osadka.Views.ImportSelectionWindow(wb)
-                {
-                    Owner = Application.Current?.MainWindow
-                };
-                if (dlg.ShowDialog() != true) return;
-
-                IXLWorksheet ws = dlg.SelectedWorksheet?.Sheet ?? throw new InvalidOperationException("Не выбран лист Excel.");
-
-                var objHeaders = dlg.ObjectHeaders;
-                var cycleStarts = dlg.CycleStarts;
-                int objIdx = dlg.SelectedObjectIndex;   // 1-based
-                int cycleIdx = dlg.SelectedCycleIndex;  // 1-based
-
-                if (objHeaders == null || objHeaders.Count == 0) objHeaders = FindObjectHeaders(ws);
-                if (objHeaders == null || objHeaders.Count == 0)
-                    throw new InvalidOperationException("Не удалось найти заголовок с «№ точки» на листе.");
-
-                var hdrTuple = objIdx >= 1 && objIdx <= objHeaders.Count ? objHeaders[objIdx - 1] : objHeaders.First();
-                int idCol = hdrTuple.Cell.Address.ColumnNumber;
-                int subHdrRow = FindSubHeaderRow(ws, hdrTuple.Row, idCol);
-
-                if (cycleStarts == null || cycleStarts.Count == 0)
-                {
-                    var computed = FindCycleStarts(ws, subHdrRow, idCol);
-                    if (computed.Count == 0)
-                    {
-                        int lastRow = ws.LastRowUsed().RowNumber();
-                        for (int r = hdrTuple.Row; r <= Math.Min(hdrTuple.Row + 10, lastRow); r++)
-                        {
-                            bool anyOtm = ws.Row(r).Cells().Any(c => Regex.IsMatch(c.GetString(), @"^\s*Отметка", RegexOptions.IgnoreCase));
-                            if (anyOtm)
-                            {
-                                subHdrRow = r;
-                                computed = FindCycleStarts(ws, subHdrRow, idCol);
-                                if (computed.Count > 0) break;
-                            }
-                        }
-                    }
-                    cycleStarts = computed;
-                }
-
-                _cycleHeaders.Clear();
-                ReadAllObjects(ws, objHeaders, cycleStarts);
-
-                ObjectNumbers.Clear();
-                foreach (var k in _objects.Keys.OrderBy(k => k)) ObjectNumbers.Add(k);
-
-                Header.ObjectNumber = (objIdx >= 1 && objIdx <= ObjectNumbers.Count)
-                    ? ObjectNumbers[objIdx - 1]
-                    : (ObjectNumbers.Count > 0 ? ObjectNumbers[0] : 1);
-
-                CycleNumbers.Clear();
-                if (_objects.TryGetValue(Header.ObjectNumber, out var cyclesForObject))
-                {
-                    foreach (var k in cyclesForObject.Keys.OrderBy(k => k)) CycleNumbers.Add(k);
-                }
-
-                if (CycleNumbers.Count > 0)
-                {
-                    int idx = Math.Clamp(cycleIdx, 1, CycleNumbers.Count);
-                    int chosenNumber = CycleNumbers[idx - 1];
-                    Header.CycleNumber = chosenNumber;
-                }
-
-                RefreshData();
+                TryLoadWorkbook(filePath);
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Ошибка при импорте Excel:\n{ex.Message}", "Импорт", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
 
-            // === Локальные функции ===
+        private void TryLoadWorkbook(string filePath)
+        {
+            try
+            {
+                LoadWorkbookInternal(filePath);
+            }
+            catch (IOException ex) when (IsSharingViolation(ex))
+            {
+                string? tempCopy = null;
+                try
+                {
+                    tempCopy = TryCreateCopyFromOpenExcel(filePath);
+                    if (string.IsNullOrEmpty(tempCopy))
+                        throw new IOException("Файл используется другим приложением и не удалось создать временную копию.", ex);
+
+                    LoadWorkbookInternal(tempCopy);
+                }
+                finally
+                {
+                    if (!string.IsNullOrEmpty(tempCopy))
+                    {
+                        try { File.Delete(tempCopy); } catch { }
+                    }
+                }
+            }
+        }
+
+        private void LoadWorkbookInternal(string filePath)
+        {
+            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var buffer = new MemoryStream();
+            stream.CopyTo(buffer);
+            buffer.Position = 0;
+
+            using var wb = new XLWorkbook(buffer);
+            ImportWorkbook(wb);
+        }
+
+        private void ImportWorkbook(XLWorkbook wb)
+        {
+            var dlg = new Osadka.Views.ImportSelectionWindow(wb)
+            {
+                Owner = Application.Current?.MainWindow
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            IXLWorksheet ws = dlg.SelectedWorksheet?.Sheet ?? throw new InvalidOperationException("Не выбран лист Excel.");
+
+            var objHeaders = dlg.ObjectHeaders;
+            var cycleStarts = dlg.CycleStarts;
+            int objIdx = dlg.SelectedObjectIndex;   // 1-based
+            int cycleIdx = dlg.SelectedCycleIndex;  // 1-based
+
+            if (objHeaders == null || objHeaders.Count == 0) objHeaders = FindObjectHeaders(ws);
+            if (objHeaders == null || objHeaders.Count == 0)
+                throw new InvalidOperationException("Не удалось найти заголовок с «№ точки» на листе.");
+
+            var hdrTuple = objIdx >= 1 && objIdx <= objHeaders.Count ? objHeaders[objIdx - 1] : objHeaders.First();
+            int idCol = hdrTuple.Cell.Address.ColumnNumber;
+            int subHdrRow = FindSubHeaderRow(ws, hdrTuple.Row, idCol);
+
+            if (cycleStarts == null || cycleStarts.Count == 0)
+            {
+                var computed = FindCycleStarts(ws, subHdrRow, idCol);
+                if (computed.Count == 0)
+                {
+                    int lastRow = ws.LastRowUsed().RowNumber();
+                    for (int r = hdrTuple.Row; r <= Math.Min(hdrTuple.Row + 10, lastRow); r++)
+                    {
+                        bool anyOtm = ws.Row(r).Cells().Any(c => Regex.IsMatch(c.GetString(), @"^\s*Отметка", RegexOptions.IgnoreCase));
+                        if (anyOtm)
+                        {
+                            subHdrRow = r;
+                            computed = FindCycleStarts(ws, subHdrRow, idCol);
+                            if (computed.Count > 0) break;
+                        }
+                    }
+                }
+                cycleStarts = computed;
+            }
+
+            _cycleHeaders.Clear();
+            ReadAllObjects(ws, objHeaders, cycleStarts);
+
+            ObjectNumbers.Clear();
+            foreach (var k in _objects.Keys.OrderBy(k => k)) ObjectNumbers.Add(k);
+
+            Header.ObjectNumber = (objIdx >= 1 && objIdx <= ObjectNumbers.Count)
+                ? ObjectNumbers[objIdx - 1]
+                : (ObjectNumbers.Count > 0 ? ObjectNumbers[0] : 1);
+
+            CycleNumbers.Clear();
+            if (_objects.TryGetValue(Header.ObjectNumber, out var cyclesForObject))
+            {
+                foreach (var k in cyclesForObject.Keys.OrderBy(k => k)) CycleNumbers.Add(k);
+            }
+
+            if (CycleNumbers.Count > 0)
+            {
+                int idx = Math.Clamp(cycleIdx, 1, CycleNumbers.Count);
+                Header.CycleNumber = CycleNumbers[idx - 1];
+            }
+
+            RefreshData();
+
             List<(int Row, IXLCell Cell)> FindObjectHeaders(IXLWorksheet sheet)
                 => sheet.RangeUsed()?
                        .Rows()
@@ -593,48 +633,124 @@ namespace Osadka.ViewModels
 
                     _objects[objNumber] = cyclesDict;
                 }
-            }
 
-            string BuildCycleHeaderLabel(IXLWorksheet sheet, int startCol, int subHdrRow, int headerRow)
+                string BuildCycleHeaderLabel(IXLWorksheet sheet, int startCol, int subHdrRow, int headerRow)
+                {
+                    string Read(IXLCell cell)
+                    {
+                        var s = cell.GetString();
+                        if (!string.IsNullOrWhiteSpace(s)) return s;
+                        var mr = cell.MergedRange();
+                        return mr != null ? mr.FirstCell().GetString() : s;
+                    }
+
+                    int r1 = Math.Max(1, headerRow - 2);
+                    int r2 = subHdrRow + 1;
+
+                    for (int r = r1; r <= r2; r++)
+                    {
+                        for (int c = startCol; c <= startCol + 2; c++)
+                        {
+                            var s = Read(sheet.Cell(r, c));
+                            if (!string.IsNullOrWhiteSpace(s) && Regex.IsMatch(s, @"^\s*Цикл\b", RegexOptions.IgnoreCase))
+                                return s.Trim();
+                        }
+                    }
+
+                    int[] offs = new[] { 0, +1, -1, +2, -2, +3, -3 };
+                    for (int r = r1; r <= r2; r++)
+                    {
+                        foreach (var dc in offs)
+                        {
+                            int c = startCol + dc;
+                            if (c <= 0) continue;
+                            var s = Read(sheet.Cell(r, c));
+                            if (!string.IsNullOrWhiteSpace(s) && Regex.IsMatch(s, @"^\s*Цикл\b", RegexOptions.IgnoreCase))
+                                return s.Trim();
+                        }
+                    }
+
+                    return string.Empty;
+                }
+            }
+        }
+
+        private static bool IsSharingViolation(IOException ex)
+        {
+            const int ERROR_SHARING_VIOLATION = 32;
+            const int ERROR_LOCK_VIOLATION = 33;
+            int code = ex.HResult & 0xFFFF;
+            return code == ERROR_SHARING_VIOLATION || code == ERROR_LOCK_VIOLATION;
+        }
+
+        private static string? TryCreateCopyFromOpenExcel(string filePath)
+        {
+            object? app = null;
+            object? workbooks = null;
+
+            try
             {
-                string Read(IXLCell cell)
-                {
-                    var s = cell.GetString();
-                    if (!string.IsNullOrWhiteSpace(s)) return s;
-                    var mr = cell.MergedRange();
-                    return mr != null ? mr.FirstCell().GetString() : s;
-                }
-
-                int r1 = Math.Max(1, headerRow - 2);
-                int r2 = subHdrRow + 1;
-
-                // 1) Ищем только внутри текущей тройки (Отметка/Осадка/Общая)
-                for (int r = r1; r <= r2; r++)
-                {
-                    for (int c = startCol; c <= startCol + 2; c++)
-                    {
-                        var s = Read(sheet.Cell(r, c));
-                        if (!string.IsNullOrWhiteSpace(s) && Regex.IsMatch(s, @"^\s*Цикл\b", RegexOptions.IgnoreCase))
-                            return s.Trim();
-                    }
-                }
-
-                // 2) Фолбэк — центр-сначала (0,+1,-1,+2,-2,...)
-                int[] offs = new[] { 0, +1, -1, +2, -2, +3, -3 };
-                for (int r = r1; r <= r2; r++)
-                {
-                    foreach (var dc in offs)
-                    {
-                        int c = startCol + dc;
-                        if (c <= 0) continue;
-                        var s = Read(sheet.Cell(r, c));
-                        if (!string.IsNullOrWhiteSpace(s) && Regex.IsMatch(s, @"^\s*Цикл\b", RegexOptions.IgnoreCase))
-                            return s.Trim();
-                    }
-                }
-
-                return string.Empty;
+                app = Marshal.GetActiveObject("Excel.Application");
             }
+            catch (COMException)
+            {
+                return null;
+            }
+
+            if (app == null) return null;
+
+            try
+            {
+                workbooks = app.GetType().InvokeMember("Workbooks", BindingFlags.GetProperty, null, app, null);
+                if (workbooks == null) return null;
+
+                int count = (int)workbooks.GetType().InvokeMember("Count", BindingFlags.GetProperty, null, workbooks, null);
+                string normalizedTarget = Path.GetFullPath(filePath);
+
+                for (int i = 1; i <= count; i++)
+                {
+                    object? wb = null;
+                    try
+                    {
+                        wb = workbooks.GetType().InvokeMember("Item", BindingFlags.GetProperty, null, workbooks, new object[] { i });
+                        if (wb == null) continue;
+
+                        string? wbPath = wb.GetType().InvokeMember("FullName", BindingFlags.GetProperty, null, wb, null) as string;
+                        if (string.IsNullOrWhiteSpace(wbPath)) continue;
+
+                        string normalizedWb = Path.GetFullPath(wbPath);
+                        if (!string.Equals(normalizedWb, normalizedTarget, StringComparison.OrdinalIgnoreCase)) continue;
+
+                        string tempPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + Path.GetExtension(filePath));
+                        wb.GetType().InvokeMember("SaveCopyAs", BindingFlags.InvokeMethod, null, wb, new object[] { tempPath });
+                        return tempPath;
+                    }
+                    finally
+                    {
+                        if (wb != null)
+                        {
+                            try { Marshal.ReleaseComObject(wb); } catch { }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                return null;
+            }
+            finally
+            {
+                if (workbooks != null)
+                {
+                    try { Marshal.ReleaseComObject(workbooks); } catch { }
+                }
+                if (app != null)
+                {
+                    try { Marshal.ReleaseComObject(app); } catch { }
+                }
+            }
+
+            return null;
         }
 
         private static (double? val, string raw) ParseCell(IXLCell cell)
