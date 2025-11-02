@@ -38,6 +38,7 @@ namespace Osadka.ViewModels
             _raw.PropertyChanged += RawOnPropertyChanged;
             _raw.DataRows.CollectionChanged += (_, __) => Recalc();
             _raw.CoordRows.CollectionChanged += (_, __) => Recalc();
+            _raw.ActiveFilterChanged += (_, __) => Recalc();
 
             Recalc();
         }
@@ -62,18 +63,23 @@ namespace Osadka.ViewModels
             double calcLim = _raw.Header.RelCalculated ?? 0;
 
             // 1) Берём срез данных (включая прочерки)
-            var data = _raw.DataRows.ToList();
-            var coords = _raw.CoordRows.ToList();
+            var data = _raw.ActiveDataRows.ToList();
+            var coordLookup = _raw.ActiveCoordRows.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
 
             // 2) ВЫРАВНИВАНИЕ ТОЛЬКО ПО ПОЗИЦИИ:
             //    координаты "прочёркнутых" точек НЕ удаляем, берём по индексу
             var coordsAligned = new List<CoordRow>(data.Count);
             for (int i = 0; i < data.Count; i++)
             {
-                if (i < coords.Count)
-                    coordsAligned.Add(coords[i]);
+                var row = data[i];
+                if (coordLookup.TryGetValue(row.Id, out var coord))
+                {
+                    coordsAligned.Add(coord);
+                }
                 else
-                    coordsAligned.Add(new CoordRow { X = double.NaN, Y = double.NaN, Id = data[i].Id });
+                {
+                    coordsAligned.Add(new CoordRow { X = double.NaN, Y = double.NaN, Id = row.Id });
+                }
             }
 
             // 3) Расчёт (без фильтраций — пары строго по индексам)

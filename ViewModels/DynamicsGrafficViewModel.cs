@@ -31,6 +31,7 @@ namespace Osadka.ViewModels
 
             ExportCommand = new RelayCommand(ExportPng, () => PlotModel.Series.Any());
             _raw.PropertyChanged += (_, __) => Rebuild();
+            _raw.ActiveFilterChanged += (_, __) => Rebuild();
 
             Rebuild();
         }
@@ -45,7 +46,8 @@ namespace Osadka.ViewModels
 
             var palette = OxyPalettes.HueDistinct(20);
             int colorIdx = 0;
-            var series = _svc.Build(_raw.CurrentCycles)
+            var activeCycles = _raw.GetActiveCyclesSnapshot();
+            var series = _svc.Build(activeCycles)
                              .Select(s => new DynamicSeries
                              {
                                  Id = s.Id,

@@ -81,6 +81,7 @@ namespace Osadka.ViewModels
             };
             _raw.DataRows.CollectionChanged += (_, __) => Recalc();
             _raw.CoordRows.CollectionChanged += (_, __) => Recalc();
+            _raw.ActiveFilterChanged += (_, __) => Recalc();
 
             Recalc();
         }
@@ -105,8 +106,9 @@ namespace Osadka.ViewModels
         }
         private void Recalc()
         {
+            var activeRows = _raw.ActiveDataRows.ToList();
             Report = _svc.Build(
-                _raw.DataRows,
+                activeRows,
                 _raw.Header.MaxNomen ?? 0,
                 _raw.Header.MaxCalculated ?? 0);
 
@@ -115,7 +117,7 @@ namespace Osadka.ViewModels
                 ExceedTotalSpDisplay = string.Join(", ",
                     Report.ExceedTotalSpIds.Select(id =>
                     {
-                        var row = _raw.DataRows.FirstOrDefault(r => r.Id == id);
+                        var row = activeRows.FirstOrDefault(r => r.Id == id);
                         return row != null
                             ? $"№{id}({row.Total:F1})"
                             : id;
@@ -125,7 +127,7 @@ namespace Osadka.ViewModels
                 ExceedTotalCalcDisplay = string.Join(", ",
                     Report.ExceedTotalCalcIds.Select(id =>
                     {
-                        var row = _raw.DataRows.FirstOrDefault(r => r.Id == id);
+                        var row = activeRows.FirstOrDefault(r => r.Id == id);
                         return row != null
                             ? $"№{id}({row.Total:F1})"
                             : id;
@@ -140,9 +142,15 @@ namespace Osadka.ViewModels
 
             double spLim = _raw.Header.RelNomen ?? 0;
             double calcLim = _raw.Header.RelCalculated ?? 0;
+            var coordLookup = _raw.ActiveCoordRows.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
+            var coordsAligned = activeRows
+                .Select(r => coordLookup.TryGetValue(r.Id, out var coord)
+                                ? coord
+                                : new CoordRow { Id = r.Id, X = double.NaN, Y = double.NaN })
+                .ToList();
             var rel = _relSvc.Build(
-                _raw.CoordRows,
-                _raw.DataRows,
+                coordsAligned,
+                activeRows,
                 spLim,
                 calcLim);
             ExceedRelSp = rel.ExceededSpRows

@@ -19,9 +19,56 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows;
+using System.Windows.Media;
 
 namespace Osadka.ViewModels
 {
+    public enum CycleStateKind
+    {
+        Missing,
+        Measured,
+        New,
+        NoAccess,
+        Destroyed,
+        Text
+    }
+
+    public partial class CycleState : ObservableObject
+    {
+        public CycleState(int cycleNumber, CycleStateKind kind, string? annotation)
+        {
+            CycleNumber = cycleNumber;
+            Kind = kind;
+            Annotation = annotation;
+        }
+
+        public int CycleNumber { get; }
+        public CycleStateKind Kind { get; }
+        public string? Annotation { get; }
+        public bool HasData => Kind != CycleStateKind.Missing;
+
+        [ObservableProperty]
+        private Brush _brush = Brushes.Transparent;
+    }
+
+    public partial class CycleStateGroup : ObservableObject
+    {
+        public CycleStateGroup(string key, IEnumerable<CycleState> states)
+        {
+            Key = key;
+            States = new ObservableCollection<CycleState>(states);
+        }
+
+        public string Key { get; }
+
+        public ObservableCollection<string> PointIds { get; } = new();
+
+        public ObservableCollection<CycleState> States { get; }
+
+        [ObservableProperty]
+        private bool _isEnabled = true;
+    }
+
     public partial class RawDataViewModel : ObservableObject
     {
         private bool _suspendRefresh;
@@ -50,6 +97,17 @@ namespace Osadka.ViewModels
         public ObservableCollection<int> ObjectNumbers { get; } = new();
         public ObservableCollection<MeasurementRow> DataRows { get; } = new();
         public ObservableCollection<CoordRow> CoordRows { get; } = new();
+
+        public ObservableCollection<CycleStateGroup> CycleGroups { get; } = new();
+
+        private readonly HashSet<string> _disabledPoints = new(StringComparer.OrdinalIgnoreCase);
+        public IReadOnlyCollection<string> DisabledPoints => _disabledPoints;
+
+        public IEnumerable<MeasurementRow> ActiveDataRows => DataRows.Where(r => !_disabledPoints.Contains(r.Id));
+        public IEnumerable<CoordRow> ActiveCoordRows => CoordRows.Where(r => !_disabledPoints.Contains(r.Id));
+
+        public event EventHandler? ActiveFilterChanged;
+        public event EventHandler? CycleGroupsChanged;
 
         [ObservableProperty] private CycleHeader header = new();
         private readonly Dictionary<int, string> _cycleHeaders = new();
@@ -198,6 +256,8 @@ namespace Osadka.ViewModels
             }
 
             OnPropertyChanged(nameof(ShowPlaceholder));
+            NotifyActiveCollectionsChanged();
+            RebuildCycleGroups();
         }
 
         private void OnClear()
@@ -205,7 +265,12 @@ namespace Osadka.ViewModels
             DataRows.Clear();
             CoordRows.Clear();
             _cycles.Clear();
+            _disabledPoints.Clear();
+            CycleGroups.Clear();
+            CycleGroupsChanged?.Invoke(this, EventArgs.Empty);
             OnPropertyChanged(nameof(ShowPlaceholder));
+            NotifyActiveCollectionsChanged();
+            ActiveFilterChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private void ChooseOrOpenTemplate()
@@ -458,6 +523,7 @@ namespace Osadka.ViewModels
 
                 _cycleHeaders.Clear();
                 ReadAllObjects(ws, objHeaders, cycleStarts);
+                _disabledPoints.Clear();
 
                 ObjectNumbers.Clear();
                 foreach (var k in _objects.Keys.OrderBy(k => k)) ObjectNumbers.Add(k);
@@ -480,6 +546,7 @@ namespace Osadka.ViewModels
                 }
 
                 RefreshData();
+                ActiveFilterChanged?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)
             {
@@ -681,6 +748,125 @@ namespace Osadka.ViewModels
             return (null, txt);
         }
 
+        public void RebuildCycleGroups()
+        {
+            CycleGroups.Clear();
+
+            if (!_objects.TryGetValue(Header.ObjectNumber, out var cyclesDict) || cyclesDict.Count == 0)
+            {
+                CycleGroupsChanged?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            var orderedCycles = cyclesDict.Keys.OrderBy(c => c).ToList();
+            var points = new Dictionary<string, Dictionary<int, MeasurementRow>>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (cycle, rows) in cyclesDict)
+            {
+                foreach (var row in rows)
+                {
+                    if (string.IsNullOrWhiteSpace(row.Id))
+                        continue;
+
+                    if (!points.TryGetValue(row.Id, out var map))
+                    {
+                        map = new Dictionary<int, MeasurementRow>();
+                        points[row.Id] = map;
+                    }
+
+                    map[cycle] = row;
+                }
+            }
+
+            var grouped = new Dictionary<string, CycleStateGroup>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (pointId, perCycle) in points.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                var states = orderedCycles
+                    .Select(cycle => CreateCycleState(cycle, perCycle.TryGetValue(cycle, out var row) ? row : null))
+                    .ToList();
+
+                string key = BuildStateKey(states);
+
+                if (!grouped.TryGetValue(key, out var group))
+                {
+                    var copies = states.Select(s => new CycleState(s.CycleNumber, s.Kind, s.Annotation)).ToList();
+                    group = new CycleStateGroup(key, copies);
+                    grouped[key] = group;
+                }
+
+                group.PointIds.Add(pointId);
+            }
+
+            var knownIds = new HashSet<string>(points.Keys, StringComparer.OrdinalIgnoreCase);
+            _disabledPoints.RemoveWhere(id => !knownIds.Contains(id));
+
+            foreach (var group in grouped.Values
+                                         .OrderByDescending(g => g.PointIds.Count)
+                                         .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                CycleGroups.Add(group);
+            }
+
+            UpdateGroupStatesFromDisabledSet();
+            CycleGroupsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void UpdateGroupStatesFromDisabledSet()
+        {
+            foreach (var group in CycleGroups)
+            {
+                bool enabled = group.PointIds.Any(id => !_disabledPoints.Contains(id));
+                if (group.IsEnabled != enabled)
+                    group.IsEnabled = enabled;
+            }
+        }
+
+        private static string BuildStateKey(IEnumerable<CycleState> states)
+            => string.Join("|", states.Select(s => ((int)s.Kind).ToString()));
+
+        private CycleState CreateCycleState(int cycleNumber, MeasurementRow? row)
+        {
+            if (row is null)
+                return new CycleState(cycleNumber, CycleStateKind.Missing, null);
+
+            var (kind, annotation) = DetermineState(row);
+            return new CycleState(cycleNumber, kind, annotation);
+        }
+
+        private static (CycleStateKind Kind, string? Annotation) DetermineState(MeasurementRow row)
+        {
+            string combined = string.Join(" ", new[] { row.MarkRaw, row.SettlRaw, row.TotalRaw }
+                .Where(s => !string.IsNullOrWhiteSpace(s)));
+            string normalized = combined.Trim().ToLowerInvariant();
+
+            bool hasNumeric = HasNumeric(row);
+
+            if (string.IsNullOrWhiteSpace(normalized))
+                return hasNumeric
+                    ? (CycleStateKind.Measured, null)
+                    : (CycleStateKind.Missing, null);
+
+            if (normalized.Contains("нов"))
+                return (CycleStateKind.New, combined);
+
+            if (normalized.Contains("нет") && (normalized.Contains("доступ") || normalized.Contains("наблю") || normalized.Contains("изм")))
+                return (CycleStateKind.NoAccess, combined);
+
+            if (normalized.Contains("уничт") || normalized.Contains("снес") || normalized.Contains("демонт") || normalized.Contains("разруш"))
+                return (CycleStateKind.Destroyed, combined);
+
+            if (hasNumeric)
+                return (CycleStateKind.Measured, null);
+
+            return (CycleStateKind.Text, combined);
+        }
+
+        private static bool HasNumeric(MeasurementRow row)
+            => (row.Mark is double m && !double.IsNaN(m))
+                || (row.Settl is double s && !double.IsNaN(s))
+                || (row.Total is double t && !double.IsNaN(t));
+
         private void UpdateCache()
         {
             if (!_objects.TryGetValue(Header.ObjectNumber, out var cycles))
@@ -690,6 +876,7 @@ namespace Osadka.ViewModels
             }
             cycles[Header.CycleNumber] = DataRows.ToList();
             OnPropertyChanged(nameof(ShowPlaceholder));
+            RebuildCycleGroups();
         }
 
         public Dictionary<int, Dictionary<int, List<MeasurementRow>>> Objects => _objects;
@@ -697,6 +884,66 @@ namespace Osadka.ViewModels
             _objects.TryGetValue(Header.ObjectNumber, out var cycles)
                 ? cycles
                 : new Dictionary<int, List<MeasurementRow>>();
+
+        public Dictionary<int, List<MeasurementRow>> GetActiveCyclesSnapshot()
+        {
+            var result = new Dictionary<int, List<MeasurementRow>>();
+            if (!_objects.TryGetValue(Header.ObjectNumber, out var cycles))
+                return result;
+
+            foreach (var (cycle, rows) in cycles)
+            {
+                var filtered = rows
+                    .Where(r => !_disabledPoints.Contains(r.Id))
+                    .ToList();
+                result[cycle] = filtered;
+            }
+
+            return result;
+        }
+
+        public void SetDisabledPoints(IEnumerable<string> ids)
+        {
+            _disabledPoints.Clear();
+            foreach (var id in ids)
+            {
+                if (!string.IsNullOrWhiteSpace(id))
+                    _disabledPoints.Add(id);
+            }
+
+            UpdateGroupStatesFromDisabledSet();
+            NotifyActiveCollectionsChanged();
+            ActiveFilterChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void ToggleGroup(CycleStateGroup group)
+        {
+            if (group is null) return;
+            SetGroupEnabled(group, !group.IsEnabled);
+        }
+
+        private void SetGroupEnabled(CycleStateGroup group, bool enable)
+        {
+            if (group is null) return;
+
+            foreach (var id in group.PointIds)
+            {
+                if (enable)
+                    _disabledPoints.Remove(id);
+                else if (!string.IsNullOrWhiteSpace(id))
+                    _disabledPoints.Add(id);
+            }
+
+            group.IsEnabled = enable;
+            NotifyActiveCollectionsChanged();
+            ActiveFilterChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void NotifyActiveCollectionsChanged()
+        {
+            OnPropertyChanged(nameof(ActiveDataRows));
+            OnPropertyChanged(nameof(ActiveCoordRows));
+        }
 
         // Небольшая утилита-вопрос для некоторых сценариев импорта
         private static bool AskInt(string prompt, int min, int max, out int value)

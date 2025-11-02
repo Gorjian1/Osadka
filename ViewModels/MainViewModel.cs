@@ -30,6 +30,7 @@ namespace Osadka.ViewModels
         public GeneralReportViewModel GenVM { get; }
         public RelativeSettlementsViewModel RelVM { get; }
         public DynamicsGrafficViewModel DynVM { get; }
+        public CycleScaleViewModel CycleScaleVM => _cycleScaleViewModel ??= new CycleScaleViewModel(RawVM);
         private readonly DynamicsReportService _dynSvc;
         public IRelayCommand HelpCommand { get; }
         public IRelayCommand<string> NavigateCommand { get; }
@@ -40,6 +41,8 @@ namespace Osadka.ViewModels
         public IRelayCommand QuickReportCommand { get; }
         public IRelayCommand PasteProxyCommand { get; }
         private CoordinateExporting? _coord;
+        private CycleScalePage? _cycleScalePage;
+        private CycleScaleViewModel? _cycleScaleViewModel;
 
         private readonly HashSet<MeasurementRow> _trackedMeasurementRows = new();
         private readonly HashSet<CoordRow> _trackedCoordRows = new();
@@ -80,6 +83,7 @@ namespace Osadka.ViewModels
             public const string Sum = "Summary";
             public const string Graf = "Graffics";
             public const string Coord = "Coordinates";
+            public const string Scale = "CycleScale";
         }
 
         private void OpenHelp()
@@ -112,6 +116,7 @@ namespace Osadka.ViewModels
             RawVM.Header.PropertyChanged += Header_PropertyChanged;
             RawVM.DataRows.CollectionChanged += DataRows_CollectionChanged;
             RawVM.CoordRows.CollectionChanged += CoordRows_CollectionChanged;
+            RawVM.ActiveFilterChanged += (_, __) => MarkDirty();
 
             foreach (var row in RawVM.DataRows)
                 SubscribeMeasurementRow(row);
@@ -164,6 +169,7 @@ namespace Osadka.ViewModels
                 PageKeys.Diff => new GeneralReportPage(GenVM),
                 PageKeys.Sum => new RelativeSettlementsPage(RelVM),
                 PageKeys.Coord => _coord ??= new CoordinateExporting(RawVM),
+                PageKeys.Scale => _cycleScalePage ??= new CycleScalePage(CycleScaleVM),
                 PageKeys.Graf => new DynamicsGrafficPage(new DynamicsGrafficViewModel(RawVM, _dynSvc)),
                 _ => CurrentPage
             };
@@ -192,22 +198,56 @@ namespace Osadka.ViewModels
                 var data = System.Text.Json.JsonSerializer.Deserialize<ProjectData>(json)
                            ?? throw new InvalidOperationException("Невалидный формат");
 
-                vm.Header.CycleNumber = data.Cycle;
-                vm.Header.MaxNomen = data.MaxNomen;
-                vm.Header.MaxCalculated = data.MaxCalculated;
-                vm.Header.RelNomen = data.RelNomen;
-                vm.Header.RelCalculated = data.RelCalculated;
+                vm.SuspendRefresh(true);
+                try
+                {
+                    vm.Header.MaxNomen = data.MaxNomen;
+                    vm.Header.MaxCalculated = data.MaxCalculated;
+                    vm.Header.RelNomen = data.RelNomen;
+                    vm.Header.RelCalculated = data.RelCalculated;
+                    vm.SelectedCycleHeader = data.SelectedCycleHeader ?? string.Empty;
+
+                    vm.DataRows.Clear();
+                    foreach (var r in data.DataRows) vm.DataRows.Add(r);
+
+                    vm.CoordRows.Clear();
+                    foreach (var r in data.CoordRows) vm.CoordRows.Add(r);
+
+                    vm.Objects.Clear();
+                    foreach (var obj in data.Objects)
+                        vm.Objects[obj.Key] = obj.Value.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+                }
+                finally
+                {
+                    vm.SuspendRefresh(false);
+                }
+
+                vm.ObjectNumbers.Clear();
+                foreach (var k in vm.Objects.Keys.OrderBy(k => k)) vm.ObjectNumbers.Add(k);
+
+                int objectNumber = data.ObjectNumber;
+                if (!vm.ObjectNumbers.Contains(objectNumber))
+                    objectNumber = vm.ObjectNumbers.FirstOrDefault();
+                if (objectNumber == 0)
+                    objectNumber = 1;
+                vm.Header.ObjectNumber = objectNumber;
+
+                vm.CycleNumbers.Clear();
+                if (vm.Objects.TryGetValue(objectNumber, out var cyclesForObject))
+                {
+                    foreach (var k in cyclesForObject.Keys.OrderBy(k => k)) vm.CycleNumbers.Add(k);
+                }
+
+                int cycleNumber = data.Cycle;
+                if (!vm.CycleNumbers.Contains(cycleNumber))
+                    cycleNumber = vm.CycleNumbers.FirstOrDefault();
+                if (cycleNumber == 0)
+                    cycleNumber = 1;
+                vm.Header.CycleNumber = cycleNumber;
+
                 vm.SelectedCycleHeader = data.SelectedCycleHeader ?? string.Empty;
-
-                vm.DataRows.Clear();
-                foreach (var r in data.DataRows) vm.DataRows.Add(r);
-
-                vm.CoordRows.Clear();
-                foreach (var r in data.CoordRows) vm.CoordRows.Add(r);
-
-                vm.Objects.Clear();
-                foreach (var obj in data.Objects)
-                    vm.Objects[obj.Key] = obj.Value.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+                vm.RebuildCycleGroups();
+                vm.SetDisabledPoints(data.DisabledPointIds ?? Array.Empty<string>());
 
                 vm.DrawingPath = dwgPath;
 
@@ -271,6 +311,7 @@ namespace Osadka.ViewModels
                 RelNomen = vm.Header.RelNomen,
                 RelCalculated = vm.Header.RelCalculated,
                 SelectedCycleHeader = vm.SelectedCycleHeader,
+                ObjectNumber = vm.Header.ObjectNumber,
                 DataRows = vm.DataRows.ToList(),
                 CoordRows = vm.CoordRows.ToList(),
                 Objects = vm.Objects.ToDictionary(
@@ -278,7 +319,8 @@ namespace Osadka.ViewModels
                     objKv => objKv.Value.ToDictionary(
                         cycleKv => cycleKv.Key,
                         cycleKv => cycleKv.Value.ToList()
-                    ))
+                    )),
+                DisabledPointIds = new HashSet<string>(vm.DisabledPoints, StringComparer.OrdinalIgnoreCase)
             };
             var node = JsonSerializer.SerializeToNode(data)!.AsObject();
             node["DwgPath"] = vm.DrawingPath;
@@ -849,10 +891,11 @@ namespace Osadka.ViewModels
                          s.Name.Equals(sheetName, System.StringComparison.OrdinalIgnoreCase))
                      ?? wb.AddWorksheet(sheetName);
 
-            var cycles = RawVM?.CurrentCycles?.Keys?.OrderBy(c => c).ToList()
-                         ?? new System.Collections.Generic.List<int>();
+            var activeCycles = RawVM?.GetActiveCyclesSnapshot()
+                               ?? new Dictionary<int, List<MeasurementRow>>();
+            var cycles = activeCycles.Keys.OrderBy(c => c).ToList();
 
-            var dynVm = new DynamicsGrafficViewModel(RawVM, _dynSvc);
+            var seriesData = _dynSvc.Build(activeCycles);
             var used = new Dictionary<string, int>(StringComparer.CurrentCultureIgnoreCase);
             string Unique(string h)
             {
@@ -885,7 +928,7 @@ namespace Osadka.ViewModels
                 .ToDictionary(x => x.cycle, x => x.col);
 
             int r = 2;
-            foreach (var ser in dynVm.Lines)
+            foreach (var ser in seriesData)
             {
                 ws.Cell(r, 1).Value = ser.Id;
 

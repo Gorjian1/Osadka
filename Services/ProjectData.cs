@@ -17,7 +17,9 @@ namespace Osadka.Models
         public List<MeasurementRow> DataRows { get; set; } = new();
         public List<CoordRow> CoordRows { get; set; } = new();
 
-   public Dictionary<int, Dictionary<int, List<MeasurementRow>>> Objects { get; set; }       = new ();
-}
+        public Dictionary<int, Dictionary<int, List<MeasurementRow>>> Objects { get; set; } = new();
+
+        public HashSet<string> DisabledPointIds { get; set; } = new();
+    }
 
 }
