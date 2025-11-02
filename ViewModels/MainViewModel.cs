@@ -240,23 +240,38 @@ namespace Osadka.ViewModels
 
         private void SaveProject()
         {
-            if (_currentPath == null)
-            {
-                SaveAsProject();
-                return;
-            }
-            SaveTo(_currentPath);
+            TrySaveProject();
         }
 
         private void SaveAsProject()
+        {
+            TrySaveProjectAs();
+        }
+
+        private bool TrySaveProject()
+        {
+            if (_currentPath == null)
+            {
+                return TrySaveProjectAs();
+            }
+
+            SaveTo(_currentPath);
+            return true;
+        }
+
+        private bool TrySaveProjectAs()
         {
             var dlg = new SaveFileDialog
             {
                 Filter = "Osadka Project (*.osd)|*.osd"
             };
-            if (dlg.ShowDialog() != true) return;
-            SaveTo(dlg.FileName);
+
+            if (dlg.ShowDialog() != true)
+                return false;
+
             _currentPath = dlg.FileName;
+            SaveTo(_currentPath);
+            return true;
         }
 
         void SaveTo(string path)
@@ -418,6 +433,26 @@ namespace Osadka.ViewModels
             _isDirty = false;
             if (SaveProjectCommand is RelayCommand relay)
                 relay.NotifyCanExecuteChanged();
+        }
+
+        public bool ConfirmClose()
+        {
+            if (!_isDirty)
+                return true;
+
+            var result = MessageBox.Show(
+                "Есть несохранённые изменения. Сохранить проект перед выходом?",
+                "Osadka",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Warning);
+
+            if (result == MessageBoxResult.Cancel)
+                return false;
+
+            if (result == MessageBoxResult.Yes)
+                return TrySaveProject();
+
+            return true;
         }
 
         private void DoQuickExport()

@@ -25,7 +25,11 @@ namespace Osadka
         }
         private void MainWindow_Closing(object? sender, CancelEventArgs e)
         {
+            if (_vm is null)
+                return;
 
+            if (!_vm.ConfirmClose())
+                e.Cancel = true;
         }
         private async void OnCheckUpdateClick(object sender, RoutedEventArgs e)
         {
