@@ -44,6 +44,7 @@ namespace Osadka.ViewModels
         private readonly HashSet<MeasurementRow> _trackedMeasurementRows = new();
         private readonly HashSet<CoordRow> _trackedCoordRows = new();
         private bool _isDirty;
+        private bool _suppressDirtyTracking;
 
         private object? _currentPage;
         private bool _includeGeneral = true;
@@ -66,6 +67,8 @@ namespace Osadka.ViewModels
             get => _includeGraphs;
             set => SetProperty(ref _includeGraphs, value);
         }
+
+        public bool HasUnsavedChanges => _isDirty;
 
         public object? CurrentPage
         {
@@ -173,8 +176,17 @@ namespace Osadka.ViewModels
 
         private void NewProject()
         {
-            RawVM.ClearCommand.Execute(null);
-            _currentPath = null;
+            _suppressDirtyTracking = true;
+            try
+            {
+                RawVM.ClearCommand.Execute(null);
+                _currentPath = null;
+            }
+            finally
+            {
+                _suppressDirtyTracking = false;
+            }
+
             ResetDirty();
         }
 
@@ -192,26 +204,35 @@ namespace Osadka.ViewModels
                 var data = System.Text.Json.JsonSerializer.Deserialize<ProjectData>(json)
                            ?? throw new InvalidOperationException("Невалидный формат");
 
-                vm.Header.CycleNumber = data.Cycle;
-                vm.Header.MaxNomen = data.MaxNomen;
-                vm.Header.MaxCalculated = data.MaxCalculated;
-                vm.Header.RelNomen = data.RelNomen;
-                vm.Header.RelCalculated = data.RelCalculated;
-                vm.SelectedCycleHeader = data.SelectedCycleHeader ?? string.Empty;
+                _suppressDirtyTracking = true;
+                try
+                {
+                    vm.Header.CycleNumber = data.Cycle;
+                    vm.Header.MaxNomen = data.MaxNomen;
+                    vm.Header.MaxCalculated = data.MaxCalculated;
+                    vm.Header.RelNomen = data.RelNomen;
+                    vm.Header.RelCalculated = data.RelCalculated;
+                    vm.SelectedCycleHeader = data.SelectedCycleHeader ?? string.Empty;
 
-                vm.DataRows.Clear();
-                foreach (var r in data.DataRows) vm.DataRows.Add(r);
+                    vm.DataRows.Clear();
+                    foreach (var r in data.DataRows) vm.DataRows.Add(r);
 
-                vm.CoordRows.Clear();
-                foreach (var r in data.CoordRows) vm.CoordRows.Add(r);
+                    vm.CoordRows.Clear();
+                    foreach (var r in data.CoordRows) vm.CoordRows.Add(r);
 
-                vm.Objects.Clear();
-                foreach (var obj in data.Objects)
-                    vm.Objects[obj.Key] = obj.Value.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+                    vm.Objects.Clear();
+                    foreach (var obj in data.Objects)
+                        vm.Objects[obj.Key] = obj.Value.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
 
-                vm.DrawingPath = dwgPath;
+                    vm.DrawingPath = dwgPath;
 
-                _currentPath = path;
+                    _currentPath = path;
+                }
+                finally
+                {
+                    _suppressDirtyTracking = false;
+                }
+
                 ResetDirty();
             }
             catch (Exception ex)
@@ -255,8 +276,18 @@ namespace Osadka.ViewModels
                 Filter = "Osadka Project (*.osd)|*.osd"
             };
             if (dlg.ShowDialog() != true) return;
-            SaveTo(dlg.FileName);
+
+            var previousPath = _currentPath;
             _currentPath = dlg.FileName;
+            try
+            {
+                SaveTo(_currentPath);
+            }
+            catch
+            {
+                _currentPath = previousPath;
+                throw;
+            }
         }
 
         void SaveTo(string path)
@@ -398,26 +429,29 @@ namespace Osadka.ViewModels
 
         private void MarkDirty()
         {
-            if (_isDirty)
+            if (_suppressDirtyTracking || _isDirty)
                 return;
+
+            var hadUnsaved = HasUnsavedChanges;
 
             _isDirty = true;
             if (SaveProjectCommand is RelayCommand saveRelay)
                 saveRelay.NotifyCanExecuteChanged();
+
+            if (!hadUnsaved)
+                OnPropertyChanged(nameof(HasUnsavedChanges));
         }
 
         private void ResetDirty()
         {
-            if (!_isDirty)
-            {
-                if (SaveProjectCommand is RelayCommand saveRelay)
-                    saveRelay.NotifyCanExecuteChanged();
-                return;
-            }
+            var hadUnsaved = HasUnsavedChanges;
 
             _isDirty = false;
             if (SaveProjectCommand is RelayCommand relay)
                 relay.NotifyCanExecuteChanged();
+
+            if (hadUnsaved != HasUnsavedChanges)
+                OnPropertyChanged(nameof(HasUnsavedChanges));
         }
 
         private void DoQuickExport()
