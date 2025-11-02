@@ -44,6 +44,7 @@ namespace Osadka.ViewModels
         private readonly HashSet<MeasurementRow> _trackedMeasurementRows = new();
         private readonly HashSet<CoordRow> _trackedCoordRows = new();
         private bool _isDirty;
+        private int _dirtyTrackingSuppressCount;
 
         private object? _currentPage;
         private bool _includeGeneral = true;
@@ -230,24 +231,32 @@ namespace Osadka.ViewModels
                 var data = System.Text.Json.JsonSerializer.Deserialize<ProjectData>(json)
                            ?? throw new InvalidOperationException("Невалидный формат");
 
-                vm.Header.CycleNumber = data.Cycle;
-                vm.Header.MaxNomen = data.MaxNomen;
-                vm.Header.MaxCalculated = data.MaxCalculated;
-                vm.Header.RelNomen = data.RelNomen;
-                vm.Header.RelCalculated = data.RelCalculated;
-                vm.SelectedCycleHeader = data.SelectedCycleHeader ?? string.Empty;
+                _dirtyTrackingSuppressCount++;
+                try
+                {
+                    vm.Header.CycleNumber = data.Cycle;
+                    vm.Header.MaxNomen = data.MaxNomen;
+                    vm.Header.MaxCalculated = data.MaxCalculated;
+                    vm.Header.RelNomen = data.RelNomen;
+                    vm.Header.RelCalculated = data.RelCalculated;
+                    vm.SelectedCycleHeader = data.SelectedCycleHeader ?? string.Empty;
 
-                vm.DataRows.Clear();
-                foreach (var r in data.DataRows) vm.DataRows.Add(r);
+                    vm.DataRows.Clear();
+                    foreach (var r in data.DataRows) vm.DataRows.Add(r);
 
-                vm.CoordRows.Clear();
-                foreach (var r in data.CoordRows) vm.CoordRows.Add(r);
+                    vm.CoordRows.Clear();
+                    foreach (var r in data.CoordRows) vm.CoordRows.Add(r);
 
-                vm.Objects.Clear();
-                foreach (var obj in data.Objects)
-                    vm.Objects[obj.Key] = obj.Value.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+                    vm.Objects.Clear();
+                    foreach (var obj in data.Objects)
+                        vm.Objects[obj.Key] = obj.Value.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
 
-                vm.DrawingPath = dwgPath;
+                    vm.DrawingPath = dwgPath;
+                }
+                finally
+                {
+                    _dirtyTrackingSuppressCount--;
+                }
 
                 _currentPath = path;
                 ResetDirty();
@@ -436,6 +445,9 @@ namespace Osadka.ViewModels
 
         private void MarkDirty()
         {
+            if (_dirtyTrackingSuppressCount > 0)
+                return;
+
             if (_isDirty)
                 return;
 
