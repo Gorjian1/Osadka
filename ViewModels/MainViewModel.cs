@@ -67,6 +67,44 @@ namespace Osadka.ViewModels
             set => SetProperty(ref _includeGraphs, value);
         }
 
+        public bool HasUnsavedChanges
+        {
+            get
+            {
+                if (_isDirty)
+                    return true;
+
+                if (_currentPath is null)
+                {
+                    if (RawVM.DataRows.Count > 0 || RawVM.CoordRows.Count > 0)
+                        return true;
+
+                    if (RawVM.Objects.Count > 0)
+                        return true;
+
+                    if (!string.IsNullOrWhiteSpace(RawVM.TemplatePath) ||
+                        !string.IsNullOrWhiteSpace(RawVM.DrawingPath))
+                        return true;
+
+                    if (!string.IsNullOrWhiteSpace(RawVM.SelectedCycleHeader))
+                        return true;
+
+                    var header = RawVM.Header;
+                    if (header.CycleNumber != 0 ||
+                        header.ObjectNumber != 0 ||
+                        header.MaxNomen.HasValue ||
+                        header.MaxCalculated.HasValue ||
+                        header.RelNomen.HasValue ||
+                        header.RelCalculated.HasValue)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
         public object? CurrentPage
         {
             get => _currentPage;
@@ -401,23 +439,26 @@ namespace Osadka.ViewModels
             if (_isDirty)
                 return;
 
+            var hadUnsaved = HasUnsavedChanges;
+
             _isDirty = true;
             if (SaveProjectCommand is RelayCommand saveRelay)
                 saveRelay.NotifyCanExecuteChanged();
+
+            if (!hadUnsaved)
+                OnPropertyChanged(nameof(HasUnsavedChanges));
         }
 
         private void ResetDirty()
         {
-            if (!_isDirty)
-            {
-                if (SaveProjectCommand is RelayCommand saveRelay)
-                    saveRelay.NotifyCanExecuteChanged();
-                return;
-            }
+            var hadUnsaved = HasUnsavedChanges;
 
             _isDirty = false;
             if (SaveProjectCommand is RelayCommand relay)
                 relay.NotifyCanExecuteChanged();
+
+            if (hadUnsaved != HasUnsavedChanges)
+                OnPropertyChanged(nameof(HasUnsavedChanges));
         }
 
         private void DoQuickExport()

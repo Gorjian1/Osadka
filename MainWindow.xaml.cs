@@ -25,7 +25,30 @@ namespace Osadka
         }
         private void MainWindow_Closing(object? sender, CancelEventArgs e)
         {
+            if (_vm is null)
+                return;
 
+            if (!_vm.HasUnsavedChanges)
+                return;
+
+            var result = MessageBox.Show(
+                "Есть несохранённые изменения. Сохранить проект перед выходом?",
+                "Несохранённые данные",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Warning);
+
+            switch (result)
+            {
+                case MessageBoxResult.Cancel:
+                    e.Cancel = true;
+                    break;
+
+                case MessageBoxResult.Yes:
+                    _vm.SaveProjectCommand.Execute(null);
+                    if (_vm.HasUnsavedChanges)
+                        e.Cancel = true;
+                    break;
+            }
         }
         private async void OnCheckUpdateClick(object sender, RoutedEventArgs e)
         {
