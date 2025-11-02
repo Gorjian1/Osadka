@@ -42,17 +42,20 @@ namespace Osadka.ViewModels
             ToggleGroupCommand = new RelayCommand<CycleStateGroup>(g => _raw.ToggleGroup(g), g => g is not null);
 
             LegendItems = new ObservableCollection<LegendItem>(
-                _brushes
-                    .OrderBy(kv => kv.Key)
-                    .Select(kv => new LegendItem(GetLegendLabel(kv.Key), kv.Value)));
+                _brushes.OrderBy(kv => kv.Key)
+                        .Select(kv => new LegendItem(GetLegendLabel(kv.Key), kv.Value)));
 
             _raw.CycleGroups.CollectionChanged += OnGroupsChanged;
             _raw.CycleGroupsChanged += (_, __) => OnCycleGroupsChanged();
             _raw.PropertyChanged += RawOnPropertyChanged;
 
             UpdateAxis();
+
+            // Построить отрезки для уже имеющихся групп и окрасить
+            foreach (var g in _raw.CycleGroups) g.RebuildSegments();
             ApplyColors();
         }
+
 
         private void RawOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
@@ -72,16 +75,39 @@ namespace Osadka.ViewModels
         private void OnCycleGroupsChanged()
         {
             UpdateAxis();
+            foreach (var g in _raw.CycleGroups) g.RebuildSegments();
             ApplyColors();
             OnPropertyChanged(nameof(Groups));
         }
 
+
+
         private void UpdateAxis()
         {
-            var cycles = _raw.CurrentCycles.Keys.OrderBy(c => c).ToList();
             CycleAxis.Clear();
-            foreach (var cycle in cycles)
-                CycleAxis.Add(cycle);
+
+            // 1) Пытаемся взять явные циклы из модели, если они есть
+            IEnumerable<int> cycles = Enumerable.Empty<int>();
+            try
+            {
+                // Если у вас нет CurrentCycles — этот блок можно оставить как есть: просто перейдёт в else
+                var prop = _raw.GetType().GetProperty("CurrentCycles");
+                if (prop?.GetValue(_raw) is IDictionary<int, object> dict && dict.Count > 0)
+                    cycles = dict.Keys;
+            }
+            catch
+            {
+                // безопасно игнорируем, используем fallback
+            }
+
+            // 2) Fallback: собираем ось по данным групп
+            if (!cycles.Any())
+                cycles = _raw.CycleGroups
+                             .SelectMany(g => g.States)
+                             .Select(s => s.CycleNumber);
+
+            foreach (var c in cycles.Distinct().OrderBy(c => c))
+                CycleAxis.Add(c);
         }
 
         private void ApplyColors()
@@ -89,11 +115,13 @@ namespace Osadka.ViewModels
             foreach (var group in _raw.CycleGroups)
             {
                 foreach (var state in group.States)
-                {
                     state.Brush = GetBrushForKind(state.Kind);
-                }
+
+                foreach (var seg in group.Segments)
+                    seg.Brush = GetBrushForKind(seg.Kind);
             }
         }
+
 
         public Brush GetBrushForKind(CycleStateKind kind)
             => _brushes.TryGetValue(kind, out var brush)

@@ -1,29 +1,44 @@
-<Page x:Class="Osadka.Views.CycleScalePage"
-      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-      mc:Ignorable="d"
-      Background="White">
+<UserControl x:Class="Osadka.Views.CycleScalePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="clr-namespace:Osadka.UI"
+             mc:Ignorable="d"
+             Background="White">
 
-    <Grid Margin="16">
+    <!-- Общая область шаринга размеров колонок между осью и полосами -->
+    <Grid Margin="16" Grid.IsSharedSizeScope="True">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <!-- Заголовок -->
             <RowDefinition Height="Auto"/>
+            <!-- Ось циклов -->
             <RowDefinition Height="*"/>
+            <!-- Контент: слева Гант, справа группы -->
         </Grid.RowDefinitions>
 
-        <StackPanel Orientation="Horizontal" Grid.Row="0" VerticalAlignment="Center" Margin="0,0,0,12">
-            <TextBlock Text="Шкала циклов" FontSize="20" FontWeight="SemiBold"/>
-        </StackPanel>
+        <!-- Заголовок -->
+        <TextBlock Grid.Row="0" Text="Шкала циклов" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12"/>
 
+        <!-- Ось циклов (над левым Гантом) -->
         <Border Grid.Row="1" Padding="8" Background="#F5F7FB" CornerRadius="6">
-            <ItemsControl ItemsSource="{Binding CycleAxis}">
+            <ItemsControl ItemsSource="{Binding CycleAxis}"
+                          AlternationCount="{Binding CycleAxis.Count}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <UniformGrid Rows="1"/>
+                        <Grid ui:GridHelpers.ColumnsCount="{Binding CycleAxis.Count}"
+                              ui:GridHelpers.SharedGroupPrefix="GanttCycle"/>
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
+
+                <ItemsControl.ItemContainerStyle>
+                    <Style TargetType="ContentPresenter">
+                        <Setter Property="Grid.Column"
+                                Value="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=AlternationIndex}"/>
+                    </Style>
+                </ItemsControl.ItemContainerStyle>
+
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Border Margin="4" Padding="6" Background="#DEE7FF" CornerRadius="4" MinWidth="60">
@@ -34,25 +49,112 @@
             </ItemsControl>
         </Border>
 
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="0,16,0,0">
-            <StackPanel>
-                <ItemsControl ItemsSource="{Binding Groups}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Margin="0,0,0,12" Padding="10" BorderBrush="#D5D9E3" BorderThickness="1" CornerRadius="6">
-                                <Grid>
+        <!-- Контент: 2 колонки -->
+        <Grid Grid.Row="2" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <!-- Левый Гант -->
+                <ColumnDefinition Width="360"/>
+                <!-- Правый список групп -->
+            </Grid.ColumnDefinitions>
+
+            <!-- ЛЕВО: Гант -->
+            <Border Grid.Column="0" BorderBrush="#E1E4EB" BorderThickness="1" CornerRadius="6">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <!-- Один ряд на группу: слева её имя, справа полосы -->
+                    <ItemsControl ItemsSource="{Binding Groups}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="8,6">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="200"/>
+                                        <ColumnDefinition Width="140"/>
+                                        <!-- подпись группы -->
                                         <ColumnDefinition Width="*"/>
+                                        <!-- полосы -->
                                     </Grid.ColumnDefinitions>
 
-                                    <CheckBox Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center" Content="Вкл"
-                                              Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                              CommandParameter="{Binding}"
-                                              IsChecked="{Binding IsEnabled, Mode=OneWay}"/>
+                                    <!-- подпись группы -->
+                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="SemiBold">
+                                        <TextBlock.Text>
+                                            <PriorityBinding>
+                                                <Binding Path="DisplayName"/>
+                                                <Binding Source="Группа"/>
+                                            </PriorityBinding>
+                                        </TextBlock.Text>
+                                    </TextBlock>
 
-                                    <StackPanel Grid.Column="1" Margin="0,0,12,0">
+
+                                    <!-- Полосы Ганта (склеенные сегменты) -->
+                                    <Grid Grid.Column="1"
+                                          ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleAxis.Count, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                          ui:GridHelpers.SharedGroupPrefix="GanttCycle">
+                                        <!-- Сегменты -->
+                                        <ItemsControl ItemsSource="{Binding Segments}"
+                                                      AlternationCount="{Binding DataContext.CycleAxis.Count, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleAxis.Count, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                          ui:GridHelpers.SharedGroupPrefix="GanttCycle"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+
+                                            <ItemsControl.ItemContainerStyle>
+                                                <Style TargetType="ContentPresenter">
+                                                    <Setter Property="Grid.Column" Value="{Binding StartIndex}"/>
+                                                    <Setter Property="Grid.ColumnSpan" Value="{Binding Span}"/>
+                                                </Style>
+                                            </ItemsControl.ItemContainerStyle>
+
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Height="28" Margin="2" CornerRadius="4" Background="{Binding Brush}">
+                                                        <Border.ToolTip>
+                                                            <StackPanel>
+                                                                <TextBlock>
+                                                                    <Run Text="Циклы: "/>
+                                                                    <Run Text="{Binding CycleFrom}"/>
+                                                                    <Run Text="–"/>
+                                                                    <Run Text="{Binding CycleTo}"/>
+                                                                </TextBlock>
+                                                                <TextBlock Text="{Binding Annotation}" TextWrapping="Wrap"/>
+                                                            </StackPanel>
+                                                        </Border.ToolTip>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Grid>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+
+            <!-- ПРАВО: список групп + легенда -->
+            <ScrollViewer Grid.Column="1" Margin="16,0,0,0" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
+                    <ItemsControl ItemsSource="{Binding Groups}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,0,0,12" Padding="10" BorderBrush="#D5D9E3" BorderThickness="1" CornerRadius="6">
+                                    <StackPanel>
+                                        <DockPanel Margin="0,0,0,6">
+                                            <CheckBox DockPanel.Dock="Left"
+                                                      Content="{Binding DisplayName}"
+                                                      VerticalAlignment="Center"
+                                                      Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      CommandParameter="{Binding}"
+                                                      IsChecked="{Binding IsEnabled, Mode=OneWay}"/>
+                                        </DockPanel>
+
                                         <TextBlock Text="Точки" FontWeight="Bold" Margin="0,0,0,4"/>
                                         <ItemsControl ItemsSource="{Binding PointIds}">
                                             <ItemsControl.ItemsPanel>
@@ -69,58 +171,29 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
                                     </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
 
-                                    <ItemsControl Grid.Column="2" ItemsSource="{Binding States}">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <UniformGrid Rows="1"/>
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border Margin="2" Height="32" CornerRadius="4" Background="{Binding Brush}">
-                                                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                                        <TextBlock Text="{Binding CycleNumber}" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
-                                                    </StackPanel>
-                                                    <Border.ToolTip>
-                                                        <StackPanel>
-                                                            <TextBlock Text="Цикл: ">
-                                                                <Run Text="{Binding CycleNumber}"/>
-                                                            </TextBlock>
-                                                            <TextBlock Text="{Binding Annotation}" TextWrapping="Wrap"/>
-                                                        </StackPanel>
-                                                    </Border.ToolTip>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                    <Border Padding="10" Background="#F7F9FC" CornerRadius="6" BorderBrush="#D5D9E3" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="Легенда" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                            <ItemsControl ItemsSource="{Binding LegendItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="8,4">
+                                            <Rectangle Width="18" Height="18" Fill="{Binding Brush}" Stroke="#33000000" StrokeThickness="1" Margin="0,0,6,0"/>
+                                            <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
 
-                <Border Padding="10" Background="#F7F9FC" CornerRadius="6" BorderBrush="#D5D9E3" BorderThickness="1">
-                    <StackPanel>
-                        <TextBlock Text="Легенда" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                        <ItemsControl ItemsSource="{Binding LegendItems}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" Margin="8,4">
-                                        <Rectangle Width="18" Height="18" Fill="{Binding Brush}" Stroke="#33000000" StrokeThickness="1" Margin="0,0,6,0"/>
-                                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </ScrollViewer>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
     </Grid>
-</Page>
+</UserControl>

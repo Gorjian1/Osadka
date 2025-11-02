@@ -247,7 +247,7 @@ namespace Osadka.ViewModels
 
                 vm.SelectedCycleHeader = data.SelectedCycleHeader ?? string.Empty;
                 vm.RebuildCycleGroups();
-                vm.SetDisabledPoints(data.DisabledPointIds ?? Array.Empty<string>());
+                vm.SetDisabledPoints(data.DisabledPointIds?.ToArray() ?? Array.Empty<string>());
 
                 vm.DrawingPath = dwgPath;
 

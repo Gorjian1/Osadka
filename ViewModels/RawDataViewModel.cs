@@ -19,7 +19,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows;
-using System.Windows.Media;
+using System.Windows.Media; // в верхней части файла уже подключён
 
 namespace Osadka.ViewModels
 {
@@ -51,6 +51,30 @@ namespace Osadka.ViewModels
         private Brush _brush = Brushes.Transparent;
     }
 
+
+
+public partial class CycleSegment : ObservableObject
+    {
+        public CycleSegment(int startIndex, int endIndex, int cycleFrom, int cycleTo, CycleStateKind kind, string? annotation)
+        {
+            StartIndex = startIndex;
+            Span = endIndex - startIndex + 1;
+            CycleFrom = cycleFrom;
+            CycleTo = cycleTo;
+            Kind = kind;
+            Annotation = annotation;
+        }
+
+        public int StartIndex { get; }
+        public int Span { get; }
+        public int CycleFrom { get; }
+        public int CycleTo { get; }
+        public CycleStateKind Kind { get; }
+        public string? Annotation { get; }
+
+        [ObservableProperty] private Brush _brush = Brushes.Transparent;
+    }
+
     public partial class CycleStateGroup : ObservableObject
     {
         public CycleStateGroup(string key, IEnumerable<CycleState> states)
@@ -65,9 +89,47 @@ namespace Osadka.ViewModels
 
         public ObservableCollection<CycleState> States { get; }
 
+        // Отрезки для Ганта (склеенные одинаковые статусы без Missing)
+        public ObservableCollection<CycleSegment> Segments { get; } = new();
+
         [ObservableProperty]
         private bool _isEnabled = true;
+
+        public void RebuildSegments()
+        {
+            Segments.Clear();
+            if (States.Count == 0) return;
+
+            int start = 0;
+            var kind = States[0].Kind;
+            string? ann = States[0].Annotation;
+
+            for (int i = 1; i < States.Count; i++)
+            {
+                var s = States[i];
+                if (s.Kind == kind) continue;
+
+                if (kind != CycleStateKind.Missing)
+                    Segments.Add(new CycleSegment(
+                        start, i - 1,
+                        States[start].CycleNumber,
+                        States[i - 1].CycleNumber,
+                        kind, ann));
+
+                start = i;
+                kind = s.Kind;
+                ann = s.Annotation;
+            }
+
+            if (kind != CycleStateKind.Missing)
+                Segments.Add(new CycleSegment(
+                    start, States.Count - 1,
+                    States[start].CycleNumber,
+                    States[States.Count - 1].CycleNumber,
+                    kind, ann));
+        }
     }
+
 
     public partial class RawDataViewModel : ObservableObject
     {
@@ -807,6 +869,10 @@ namespace Osadka.ViewModels
             {
                 CycleGroups.Add(group);
             }
+
+            // Построить отрезки для Ганта
+            foreach (var g in CycleGroups)
+                g.RebuildSegments();
 
             UpdateGroupStatesFromDisabledSet();
             CycleGroupsChanged?.Invoke(this, EventArgs.Empty);

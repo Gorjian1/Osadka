@@ -3,7 +3,7 @@ using Osadka.ViewModels;
 
 namespace Osadka.Views
 {
-    public partial class CycleScalePage : Page
+    public partial class CycleScalePage : UserControl
     {
         public CycleScalePage(CycleScaleViewModel viewModel)
         {
