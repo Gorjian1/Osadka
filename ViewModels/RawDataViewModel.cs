@@ -53,7 +53,7 @@ namespace Osadka.ViewModels
 
 
 
-public partial class CycleSegment : ObservableObject
+    public partial class CycleSegment : ObservableObject
     {
         public CycleSegment(int startIndex, int endIndex, int cycleFrom, int cycleTo, CycleStateKind kind, string? annotation)
         {
@@ -75,15 +75,85 @@ public partial class CycleSegment : ObservableObject
         [ObservableProperty] private Brush _brush = Brushes.Transparent;
     }
 
+    public partial class CycleMeaningGroup : ObservableObject, IDisposable
+    {
+        public CycleMeaningGroup(CycleStateGroup owner, CycleStateKind kind, IEnumerable<CycleSegment> segments)
+        {
+            Owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            Kind = kind;
+            Segments = new ObservableCollection<CycleSegment>(segments ?? Enumerable.Empty<CycleSegment>());
+            Title = ComposeTitle();
+            Owner.PropertyChanged += OwnerOnPropertyChanged;
+        }
+
+        public CycleStateGroup Owner { get; }
+
+        public CycleStateKind Kind { get; }
+
+        public ObservableCollection<CycleSegment> Segments { get; }
+
+        [ObservableProperty]
+        private string _title = string.Empty;
+
+        [ObservableProperty]
+        private int _displayOrder;
+
+        public bool IsAlternateRow => DisplayOrder % 2 == 1;
+
+        public bool IsFirstRow => DisplayOrder == 0;
+
+        public string Meaning => Kind switch
+        {
+            CycleStateKind.Measured => "Измерено",
+            CycleStateKind.New => "Новая точка",
+            CycleStateKind.NoAccess => "Нет доступа",
+            CycleStateKind.Destroyed => "Уничтожена",
+            CycleStateKind.Text => "Особая отметка",
+            CycleStateKind.Missing => "Нет данных",
+            _ => Kind.ToString()
+        };
+
+        private string ComposeTitle()
+        {
+            string prefix = string.IsNullOrWhiteSpace(Owner.DisplayName)
+                ? string.Empty
+                : Owner.DisplayName + " — ";
+
+            return prefix + Meaning;
+        }
+
+        private void OwnerOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(CycleStateGroup.DisplayName))
+                Title = ComposeTitle();
+        }
+
+        partial void OnDisplayOrderChanged(int value)
+        {
+            OnPropertyChanged(nameof(IsAlternateRow));
+            OnPropertyChanged(nameof(IsFirstRow));
+        }
+
+        public void Dispose()
+        {
+            Owner.PropertyChanged -= OwnerOnPropertyChanged;
+        }
+    }
+
     public partial class CycleStateGroup : ObservableObject
     {
         public CycleStateGroup(string key, IEnumerable<CycleState> states)
         {
             Key = key;
             States = new ObservableCollection<CycleState>(states);
+            DisplayBrush = CreateBrush(DisplayColor);
+            ApplyDisplayColor();
         }
 
         public string Key { get; }
+
+        [ObservableProperty]
+        private string _displayName = string.Empty;
 
         public ObservableCollection<string> PointIds { get; } = new();
 
@@ -92,17 +162,73 @@ public partial class CycleSegment : ObservableObject
         // Отрезки для Ганта (склеенные одинаковые статусы без Missing)
         public ObservableCollection<CycleSegment> Segments { get; } = new();
 
+        // Разделение отрезков по смыслу (типу статуса)
+        public ObservableCollection<CycleMeaningGroup> MeaningGroups { get; } = new();
+
         [ObservableProperty]
         private bool _isEnabled = true;
 
+        [ObservableProperty]
+        private Color _displayColor = Color.FromRgb(0x4A, 0x90, 0xE2);
+
+        private SolidColorBrush _displayBrush = CreateBrush(Color.FromRgb(0x4A, 0x90, 0xE2));
+
+        public SolidColorBrush DisplayBrush
+        {
+            get => _displayBrush;
+            private set => SetProperty(ref _displayBrush, value);
+        }
+
+        partial void OnDisplayColorChanged(Color value)
+        {
+            ApplyDisplayColor();
+        }
+
+        public void ApplyDisplayColor()
+        {
+            var brush = CreateBrush(DisplayColor);
+            DisplayBrush = brush;
+
+            foreach (var state in States)
+            {
+                state.Brush = state.Kind == CycleStateKind.Missing
+                    ? Brushes.Transparent
+                    : brush;
+            }
+
+            foreach (var segment in Segments)
+                segment.Brush = brush;
+
+            foreach (var meaning in MeaningGroups)
+            {
+                foreach (var segment in meaning.Segments)
+                    segment.Brush = brush;
+            }
+        }
+
+        private static SolidColorBrush CreateBrush(Color color)
+        {
+            var brush = new SolidColorBrush(color);
+            if (brush.CanFreeze)
+                brush.Freeze();
+            return brush;
+        }
+
         public void RebuildSegments()
         {
+            foreach (var meaning in MeaningGroups)
+                meaning.Dispose();
+
+            MeaningGroups.Clear();
             Segments.Clear();
-            if (States.Count == 0) return;
+            if (States.Count == 0)
+                return;
 
             int start = 0;
             var kind = States[0].Kind;
             string? ann = States[0].Annotation;
+
+            var segments = new List<CycleSegment>();
 
             for (int i = 1; i < States.Count; i++)
             {
@@ -110,7 +236,7 @@ public partial class CycleSegment : ObservableObject
                 if (s.Kind == kind) continue;
 
                 if (kind != CycleStateKind.Missing)
-                    Segments.Add(new CycleSegment(
+                    segments.Add(new CycleSegment(
                         start, i - 1,
                         States[start].CycleNumber,
                         States[i - 1].CycleNumber,
@@ -122,17 +248,65 @@ public partial class CycleSegment : ObservableObject
             }
 
             if (kind != CycleStateKind.Missing)
-                Segments.Add(new CycleSegment(
+                segments.Add(new CycleSegment(
                     start, States.Count - 1,
                     States[start].CycleNumber,
                     States[States.Count - 1].CycleNumber,
                     kind, ann));
+
+            foreach (var segment in segments)
+                Segments.Add(segment);
+
+            if (segments.Count == 0)
+            {
+                ApplyDisplayColor();
+                return;
+            }
+
+            var order = new List<CycleStateKind>();
+            foreach (var segment in segments)
+            {
+                if (!order.Contains(segment.Kind))
+                    order.Add(segment.Kind);
+            }
+
+            foreach (var k in order)
+            {
+                var sameKind = segments.Where(s => s.Kind == k).ToList();
+                if (sameKind.Count == 0)
+                    continue;
+
+                MeaningGroups.Add(new CycleMeaningGroup(this, k, sameKind));
+            }
+
+            ApplyDisplayColor();
+        }
+
+        public void SortPointIds(IComparer<string> comparer)
+        {
+            if (comparer is null)
+                throw new ArgumentNullException(nameof(comparer));
+
+            if (PointIds.Count <= 1)
+                return;
+
+            var ordered = PointIds.OrderBy(id => id, comparer).ToList();
+
+            if (ordered.SequenceEqual(PointIds))
+                return;
+
+            PointIds.Clear();
+            foreach (var id in ordered)
+                PointIds.Add(id);
         }
     }
 
 
     public partial class RawDataViewModel : ObservableObject
     {
+        private static readonly Regex PointIdNumberRegex = new("^\\s*(\\d+)", RegexOptions.Compiled);
+        private static readonly IComparer<string> PointIdComparer = Comparer<string>.Create(ComparePointIds);
+
         private bool _suspendRefresh;
         public void SuspendRefresh(bool on) => _suspendRefresh = on;
 
@@ -863,10 +1037,13 @@ public partial class CycleSegment : ObservableObject
             var knownIds = new HashSet<string>(points.Keys, StringComparer.OrdinalIgnoreCase);
             _disabledPoints.RemoveWhere(id => !knownIds.Contains(id));
 
+            int groupIndex = 1;
             foreach (var group in grouped.Values
                                          .OrderByDescending(g => g.PointIds.Count)
                                          .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
             {
+                group.SortPointIds(PointIdComparer);
+                group.DisplayName = $"Группа {groupIndex++}";
                 CycleGroups.Add(group);
             }
 
@@ -988,7 +1165,7 @@ public partial class CycleSegment : ObservableObject
             SetGroupEnabled(group, !group.IsEnabled);
         }
 
-        private void SetGroupEnabled(CycleStateGroup group, bool enable)
+        public void SetGroupEnabled(CycleStateGroup group, bool enable)
         {
             if (group is null) return;
 
@@ -1009,6 +1186,40 @@ public partial class CycleSegment : ObservableObject
         {
             OnPropertyChanged(nameof(ActiveDataRows));
             OnPropertyChanged(nameof(ActiveCoordRows));
+        }
+
+        private static int ComparePointIds(string? left, string? right)
+        {
+            if (ReferenceEquals(left, right))
+                return 0;
+            if (left is null)
+                return -1;
+            if (right is null)
+                return 1;
+
+            var leftMatch = PointIdNumberRegex.Match(left);
+            var rightMatch = PointIdNumberRegex.Match(right);
+
+            if (leftMatch.Success && rightMatch.Success)
+            {
+                if (int.TryParse(leftMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int leftNumber) &&
+                    int.TryParse(rightMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int rightNumber))
+                {
+                    int cmp = leftNumber.CompareTo(rightNumber);
+                    if (cmp != 0)
+                        return cmp;
+                }
+            }
+            else if (leftMatch.Success)
+            {
+                return -1;
+            }
+            else if (rightMatch.Success)
+            {
+                return 1;
+            }
+
+            return string.Compare(left, right, StringComparison.OrdinalIgnoreCase);
         }
 
         // Небольшая утилита-вопрос для некоторых сценариев импорта

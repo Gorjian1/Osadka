@@ -30,7 +30,7 @@ namespace Osadka.ViewModels
         public GeneralReportViewModel GenVM { get; }
         public RelativeSettlementsViewModel RelVM { get; }
         public DynamicsGrafficViewModel DynVM { get; }
-        public CycleScaleViewModel CycleScaleVM => _cycleScaleViewModel ??= new CycleScaleViewModel(RawVM);
+        public CycleStateViewModel CycleStateVM => _cycleStateViewModel ??= new CycleStateViewModel(RawVM);
         private readonly DynamicsReportService _dynSvc;
         public IRelayCommand HelpCommand { get; }
         public IRelayCommand<string> NavigateCommand { get; }
@@ -41,8 +41,8 @@ namespace Osadka.ViewModels
         public IRelayCommand QuickReportCommand { get; }
         public IRelayCommand PasteProxyCommand { get; }
         private CoordinateExporting? _coord;
-        private CycleScalePage? _cycleScalePage;
-        private CycleScaleViewModel? _cycleScaleViewModel;
+        private CycleStatePage? _cycleStatePage;
+        private CycleStateViewModel? _cycleStateViewModel;
 
         private readonly HashSet<MeasurementRow> _trackedMeasurementRows = new();
         private readonly HashSet<CoordRow> _trackedCoordRows = new();
@@ -83,7 +83,7 @@ namespace Osadka.ViewModels
             public const string Sum = "Summary";
             public const string Graf = "Graffics";
             public const string Coord = "Coordinates";
-            public const string Scale = "CycleScale";
+            public const string State = "CycleState";
         }
 
         private void OpenHelp()
@@ -169,7 +169,7 @@ namespace Osadka.ViewModels
                 PageKeys.Diff => new GeneralReportPage(GenVM),
                 PageKeys.Sum => new RelativeSettlementsPage(RelVM),
                 PageKeys.Coord => _coord ??= new CoordinateExporting(RawVM),
-                PageKeys.Scale => _cycleScalePage ??= new CycleScalePage(CycleScaleVM),
+                PageKeys.State => _cycleStatePage ??= new CycleStatePage(CycleStateVM),
                 PageKeys.Graf => new DynamicsGrafficPage(new DynamicsGrafficViewModel(RawVM, _dynSvc)),
                 _ => CurrentPage
             };
