@@ -3,9 +3,9 @@ using Osadka.ViewModels;
 
 namespace Osadka.Views
 {
-    public partial class CycleScalePage : UserControl
+    public partial class CycleStatePage : UserControl
     {
-        public CycleScalePage(CycleScaleViewModel viewModel)
+        public CycleStatePage(CycleStateViewModel viewModel)
         {
             InitializeComponent();
             DataContext = viewModel;

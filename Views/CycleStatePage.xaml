@@ -1,0 +1,198 @@
+<UserControl x:Class="Osadka.Views.CycleStatePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="720"
+             d:DesignWidth="1280">
+    <UserControl.Resources>
+        <Style x:Key="CycleHeaderCell" TargetType="Border">
+            <Setter Property="Background" Value="#F3F5F9" />
+            <Setter Property="BorderBrush" Value="#D5DBE5" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="Margin" Value="0,0,2,0" />
+        </Style>
+
+        <Style x:Key="CycleCell" TargetType="Border">
+            <Setter Property="BorderBrush" Value="#D5DBE5" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Margin" Value="0,0,2,2" />
+            <Setter Property="Padding" Value="4" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="#F4F6FA" Padding="16">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="320" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="White" CornerRadius="12" Padding="16" Margin="0,0,16,0" SnapsToDevicePixels="True">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="220" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Style="{StaticResource CycleHeaderCell}" CornerRadius="4,4,0,0" BorderThickness="1,1,1,1">
+                            <TextBlock Text="Группа"
+                                       VerticalAlignment="Center"
+                                       FontWeight="SemiBold"
+                                       Foreground="#2C3E50" />
+                        </Border>
+
+                        <ItemsControl Grid.Column="1"
+                                      ItemsSource="{Binding Columns}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource CycleHeaderCell}"
+                                            Width="{Binding DataContext.CellWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            BorderThickness="1">
+                                        <TextBlock Text="{Binding Caption}"
+                                                   TextAlignment="Center"
+                                                   FontWeight="SemiBold"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="#2C3E50" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+
+                    <ItemsControl ItemsSource="{Binding Rows}" Margin="0,8,0,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Vertical" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.Style>
+                                        <Style TargetType="Grid">
+                                            <Setter Property="Opacity" Value="1" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Group.IsEnabled}" Value="False">
+                                                    <Setter Property="Opacity" Value="0.45" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Grid.Style>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border Background="#F7F9FC" BorderBrush="#D5DBE5" BorderThickness="1" CornerRadius="6"
+                                            Padding="12" Margin="0,0,6,0">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Group.DisplayName}" FontWeight="SemiBold" Foreground="#2C3E50" />
+                                            <TextBlock Text="{Binding PointCount, StringFormat={}{0} точек}" FontSize="12" Foreground="#5C6B7A" Margin="0,4,0,0" />
+                                            <TextBlock Text="{Binding PointSummary}" TextWrapping="Wrap" FontSize="12" Foreground="#78889B" />
+                                        </StackPanel>
+                                    </Border>
+
+                                    <ItemsControl Grid.Column="1" ItemsSource="{Binding Cells}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Style="{StaticResource CycleCell}"
+                                                        Width="{Binding DataContext.CellWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        Height="{Binding DataContext.RowHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        Background="{Binding Fill}">
+                                                    <Border.Effect>
+                                                        <DropShadowEffect ShadowDepth="0" BlurRadius="4" Opacity="0.1" />
+                                                    </Border.Effect>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding CycleNumber}" FontWeight="SemiBold" Foreground="#2C3E50" TextAlignment="Center" />
+                                                        <TextBlock Text="{Binding Label}" FontSize="12" TextAlignment="Center" TextWrapping="Wrap" Foreground="#2C3E50" />
+                                                    </StackPanel>
+                                                    <Border.ToolTip>
+                                                        <StackPanel>
+                                                            <TextBlock Text="{Binding CycleNumber, StringFormat=Цикл {0}}" FontWeight="SemiBold" />
+                                                            <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                    </Border.ToolTip>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <Border Grid.Column="1" Background="White" CornerRadius="12" Padding="16">
+            <DockPanel>
+                <TextBlock Text="Настройки групп" FontSize="18" FontWeight="SemiBold" Foreground="#2C3E50" DockPanel.Dock="Top" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
+                    <StackPanel>
+                        <ItemsControl ItemsSource="{Binding Groups}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="#D5DBE5" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,12" Background="#F7F9FC">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <CheckBox IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                                          Content="{Binding DisplayName}" FontWeight="SemiBold" Foreground="#2C3E50" />
+                                                <Button Content="Палитра" Margin="8,0,0,0" Padding="8,2"
+                                                        Command="{Binding DataContext.ChooseColorCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}" />
+                                            </StackPanel>
+                                            <ComboBox ItemsSource="{Binding DataContext.ColorOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      SelectedValuePath="Color"
+                                                      SelectedValue="{Binding DisplayColor, Mode=TwoWay}"
+                                                      Margin="0,8,0,0">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Rectangle Width="16" Height="16" Fill="{Binding Brush}" Stroke="#D5DBE5" StrokeThickness="1" Margin="0,0,6,0" />
+                                                            <TextBlock Text="{Binding Name}" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                            <ItemsControl ItemsSource="{Binding PointIds}" Margin="0,8,0,0">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="White" BorderBrush="#D5DBE5" BorderThickness="1" CornerRadius="4" Margin="0,0,6,6" Padding="6,2">
+                                                            <TextBlock Text="{Binding}" FontSize="12" Foreground="#2C3E50" />
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>
