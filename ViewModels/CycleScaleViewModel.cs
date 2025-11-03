@@ -10,8 +10,6 @@ using System.Windows.Media;
 
 namespace Osadka.ViewModels
 {
-    public record LegendItem(string Label, Brush Brush);
-
     public partial class CycleScaleViewModel : ObservableObject
     {
         private readonly RawDataViewModel _raw;
@@ -19,9 +17,9 @@ namespace Osadka.ViewModels
 
         public ReadOnlyObservableCollection<CycleStateGroup> Groups => _groups;
 
-        public ObservableCollection<int> CycleAxis { get; } = new();
+        public ObservableCollection<CycleMeaningGroup> DisplayGroups { get; } = new();
 
-        public ObservableCollection<LegendItem> LegendItems { get; }
+        public ObservableCollection<int> CycleAxis { get; } = new();
 
         public IRelayCommand<CycleStateGroup> ToggleGroupCommand { get; }
 
@@ -41,10 +39,6 @@ namespace Osadka.ViewModels
             _groups = new ReadOnlyObservableCollection<CycleStateGroup>(_raw.CycleGroups);
             ToggleGroupCommand = new RelayCommand<CycleStateGroup>(g => _raw.ToggleGroup(g), g => g is not null);
 
-            LegendItems = new ObservableCollection<LegendItem>(
-                _brushes.OrderBy(kv => kv.Key)
-                        .Select(kv => new LegendItem(GetLegendLabel(kv.Key), kv.Value)));
-
             _raw.CycleGroups.CollectionChanged += OnGroupsChanged;
             _raw.CycleGroupsChanged += (_, __) => OnCycleGroupsChanged();
             _raw.PropertyChanged += RawOnPropertyChanged;
@@ -54,6 +48,7 @@ namespace Osadka.ViewModels
             // Построить отрезки для уже имеющихся групп и окрасить
             foreach (var g in _raw.CycleGroups) g.RebuildSegments();
             ApplyColors();
+            RefreshDisplayGroups();
         }
 
 
@@ -70,6 +65,7 @@ namespace Osadka.ViewModels
         private void OnGroupsChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
             ApplyColors();
+            RefreshDisplayGroups();
         }
 
         private void OnCycleGroupsChanged()
@@ -77,6 +73,7 @@ namespace Osadka.ViewModels
             UpdateAxis();
             foreach (var g in _raw.CycleGroups) g.RebuildSegments();
             ApplyColors();
+            RefreshDisplayGroups();
             OnPropertyChanged(nameof(Groups));
         }
 
@@ -119,6 +116,26 @@ namespace Osadka.ViewModels
 
                 foreach (var seg in group.Segments)
                     seg.Brush = GetBrushForKind(seg.Kind);
+                foreach (var meaning in group.MeaningGroups)
+                {
+                    foreach (var seg in meaning.Segments)
+                        seg.Brush = GetBrushForKind(seg.Kind);
+                }
+            }
+        }
+
+        private void RefreshDisplayGroups()
+        {
+            DisplayGroups.Clear();
+
+            int order = 0;
+            foreach (var group in _raw.CycleGroups)
+            {
+                foreach (var meaning in group.MeaningGroups)
+                {
+                    meaning.DisplayOrder = order++;
+                    DisplayGroups.Add(meaning);
+                }
             }
         }
 
@@ -127,16 +144,5 @@ namespace Osadka.ViewModels
             => _brushes.TryGetValue(kind, out var brush)
                 ? brush
                 : Brushes.LightGray;
-
-        private static string GetLegendLabel(CycleStateKind kind) => kind switch
-        {
-            CycleStateKind.Measured => "Измерено",
-            CycleStateKind.New => "Новая точка",
-            CycleStateKind.NoAccess => "Нет доступа",
-            CycleStateKind.Destroyed => "Уничтожена",
-            CycleStateKind.Text => "Особая отметка",
-            CycleStateKind.Missing => "Нет данных",
-            _ => kind.ToString()
-        };
     }
 }
