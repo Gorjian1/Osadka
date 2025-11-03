@@ -36,8 +36,8 @@
         <DataTemplate x:Key="CycleSegmentTemplate" DataType="vm:CycleGroupSegment">
             <Border Background="{Binding Background}"
                     CornerRadius="8"
-                    Margin="2,6"
-                    MinHeight="40"
+                    Margin="2,10"
+                    MinHeight="20"
                     ToolTip="{Binding ToolTip}">
                 <TextBlock Text="{Binding Label}"
                            Foreground="{Binding Foreground}"
@@ -109,42 +109,42 @@
                                           IsHitTestVisible="False">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
-                                    <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                          ui:GridHelpers.SharedGroupPrefix="CycleColumn"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemContainerStyle>
-                                <Style TargetType="ContentPresenter">
-                                    <Setter Property="Grid.Column" Value="{Binding RelativeSource={RelativeSource Self}, Path=(ItemsControl.AlternationIndex)}"/>
-                                </Style>
-                            </ItemsControl.ItemContainerStyle>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border BorderBrush="#E4E9F5"
-                                            Background="#FDFEFF"
-                                            BorderThickness="0,0,1,0"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <ItemsControl ItemsSource="{Binding Segments}"
-                                      AlternationCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}, FallbackValue=1}"
-                                      ItemTemplate="{StaticResource CycleSegmentTemplate}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                          ui:GridHelpers.SharedGroupPrefix="CycleColumn"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemContainerStyle>
-                                <Style TargetType="ContentPresenter">
-                                    <Setter Property="Grid.Column" Value="{Binding StartIndex}"/>
-                                    <Setter Property="Grid.ColumnSpan" Value="{Binding Length}"/>
-                                    <Setter Property="HorizontalAlignment" Value="Stretch"/>
-                                </Style>
-                            </ItemsControl.ItemContainerStyle>
-                        </ItemsControl>
+                                        <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              ui:GridHelpers.SharedGroupPrefix="CycleColumn"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Grid.Column" Value="{Binding RelativeSource={RelativeSource Self}, Path=(ItemsControl.AlternationIndex)}"/>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="#E4E9F5"
+                                                Background="#FDFEFF"
+                                                BorderThickness="0,0,1,0"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <ItemsControl ItemsSource="{Binding Segments}"
+                                          AlternationCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}, FallbackValue=1}"
+                                          ItemTemplate="{StaticResource CycleSegmentTemplate}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              ui:GridHelpers.SharedGroupPrefix="CycleColumn"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Grid.Column" Value="{Binding StartIndex}"/>
+                                        <Setter Property="Grid.ColumnSpan" Value="{Binding Length}"/>
+                                        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                            </ItemsControl>
+                        </Grid>
                     </Grid>
-                </Grid>
                 </Grid>
             </Border>
         </DataTemplate>
@@ -163,17 +163,48 @@
         <Style TargetType="ScrollViewer">
             <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
             <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style TargetType="GridSplitter">
+            <Setter Property="Width" Value="8"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="ResizeDirection" Value="Columns"/>
+            <Setter Property="ResizeBehavior" Value="PreviousAndNext"/>
+            <Setter Property="Background" Value="#E2E6F0"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GridSplitter">
+                        <Border CornerRadius="4"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="#C5CCE1"
+                                BorderThickness="1"
+                                Margin="0,12">
+                            <Border Background="#F7F9FF"
+                                    CornerRadius="4"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </UserControl.Resources>
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="3*"/>
-            <ColumnDefinition Width="2*"/>
+            <ColumnDefinition Width="*" MinWidth="360"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*" MinWidth="320"/>
         </Grid.ColumnDefinitions>
 
         <!-- Левая часть -->
-        <Border Grid.Column="0" Padding="20" Background="#FFFFFF" CornerRadius="12" BorderBrush="#E2E6F0" BorderThickness="1">
+        <Border Grid.Column="0"
+                Padding="20"
+                Background="#FFFFFF"
+                CornerRadius="12,0,0,12"
+                BorderBrush="#E2E6F0"
+                BorderThickness="1,1,0,1">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -241,13 +272,15 @@
             </Grid>
         </Border>
 
+        <GridSplitter Grid.Column="1"/>
+
         <!-- Правая часть -->
-        <Border Grid.Column="1"
+        <Border Grid.Column="2"
                 Padding="20"
                 Background="#FFFFFF"
-                CornerRadius="12"
+                CornerRadius="0,12,12,0"
                 BorderBrush="#E2E6F0"
-                BorderThickness="1">
+                BorderThickness="0,1,1,1">
             <ScrollViewer>
                 <Grid>
                     <Grid.RowDefinitions>

@@ -387,7 +387,8 @@ namespace Osadka.ViewModels
                 if (!isBoundary)
                     continue;
 
-                AddSegment(segmentStart, index - 1, currentKind);
+                if (currentKind != CycleStateKind.Missing)
+                    AddSegment(segmentStart, index - 1, currentKind);
 
                 if (index < Cells.Count)
                 {
