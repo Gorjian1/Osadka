@@ -9,6 +9,11 @@
              d:DesignWidth="1280"
              d:DesignHeight="720">
     <UserControl.Resources>
+        <SolidColorBrush x:Key="CanvasBrush" Color="#F6F7FB"/>
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFFFF"/>
+        <SolidColorBrush x:Key="PanelBorderBrush" Color="#E2E6F0"/>
+        <SolidColorBrush x:Key="SecondaryTextBrush" Color="#596684"/>
+
         <Style x:Key="RowHeaderText" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#212121"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -36,8 +41,8 @@
         <DataTemplate x:Key="CycleSegmentTemplate" DataType="vm:CycleGroupSegment">
             <Border Background="{Binding Background}"
                     CornerRadius="8"
-                    Margin="2,6"
-                    MinHeight="40"
+                    Margin="2,10"
+                    MinHeight="20"
                     ToolTip="{Binding ToolTip}">
                 <TextBlock Text="{Binding Label}"
                            Foreground="{Binding Foreground}"
@@ -109,42 +114,42 @@
                                           IsHitTestVisible="False">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
-                                    <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                          ui:GridHelpers.SharedGroupPrefix="CycleColumn"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemContainerStyle>
-                                <Style TargetType="ContentPresenter">
-                                    <Setter Property="Grid.Column" Value="{Binding RelativeSource={RelativeSource Self}, Path=(ItemsControl.AlternationIndex)}"/>
-                                </Style>
-                            </ItemsControl.ItemContainerStyle>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border BorderBrush="#E4E9F5"
-                                            Background="#FDFEFF"
-                                            BorderThickness="0,0,1,0"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <ItemsControl ItemsSource="{Binding Segments}"
-                                      AlternationCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}, FallbackValue=1}"
-                                      ItemTemplate="{StaticResource CycleSegmentTemplate}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                          ui:GridHelpers.SharedGroupPrefix="CycleColumn"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemContainerStyle>
-                                <Style TargetType="ContentPresenter">
-                                    <Setter Property="Grid.Column" Value="{Binding StartIndex}"/>
-                                    <Setter Property="Grid.ColumnSpan" Value="{Binding Length}"/>
-                                    <Setter Property="HorizontalAlignment" Value="Stretch"/>
-                                </Style>
-                            </ItemsControl.ItemContainerStyle>
-                        </ItemsControl>
+                                        <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              ui:GridHelpers.SharedGroupPrefix="CycleColumn"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Grid.Column" Value="{Binding RelativeSource={RelativeSource Self}, Path=(ItemsControl.AlternationIndex)}"/>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="#E4E9F5"
+                                                Background="#FDFEFF"
+                                                BorderThickness="0,0,1,0"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <ItemsControl ItemsSource="{Binding Segments}"
+                                          AlternationCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}, FallbackValue=1}"
+                                          ItemTemplate="{StaticResource CycleSegmentTemplate}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              ui:GridHelpers.SharedGroupPrefix="CycleColumn"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Grid.Column" Value="{Binding StartIndex}"/>
+                                        <Setter Property="Grid.ColumnSpan" Value="{Binding Length}"/>
+                                        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                            </ItemsControl>
+                        </Grid>
                     </Grid>
-                </Grid>
                 </Grid>
             </Border>
         </DataTemplate>
@@ -160,20 +165,91 @@
             </StackPanel>
         </DataTemplate>
 
+        <DataTemplate x:Key="GroupPointTemplate" DataType="vm:CycleGroupPointEntry">
+            <Border Padding="10"
+                    Background="#F8FAFF"
+                    BorderBrush="#E1E6F5"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Margin="0,0,0,8">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="10"
+                                Height="10"
+                                CornerRadius="5"
+                                Margin="0,0,8,0"
+                                Background="{Binding DataContext.AccentBrush, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                BorderBrush="#D0D7E5"
+                                BorderThickness="1"/>
+                        <TextBlock Text="{Binding Id}"
+                                   FontWeight="SemiBold"
+                                   Foreground="#243157"/>
+                    </StackPanel>
+                    <TextBlock Text="Исключена из расчёта"
+                               Margin="0,6,0,0"
+                               Foreground="#B2555A"
+                               FontSize="12">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsIncluded}" Value="False">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
         <Style TargetType="ScrollViewer">
             <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
             <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style TargetType="GridSplitter">
+            <Setter Property="Width" Value="8"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="ResizeDirection" Value="Columns"/>
+            <Setter Property="ResizeBehavior" Value="PreviousAndNext"/>
+            <Setter Property="Background" Value="#E2E6F0"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GridSplitter">
+                        <Border CornerRadius="4"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="#C5CCE1"
+                                BorderThickness="1"
+                                Margin="0,12">
+                            <Border Background="#F7F9FF"
+                                    CornerRadius="4"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </UserControl.Resources>
 
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="3*"/>
-            <ColumnDefinition Width="2*"/>
-        </Grid.ColumnDefinitions>
+    <Grid Background="{StaticResource CanvasBrush}">
+        <Grid Margin="16,12,16,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="360"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*" MinWidth="320"/>
+            </Grid.ColumnDefinitions>
 
-        <!-- Левая часть -->
-        <Border Grid.Column="0" Padding="20" Background="#FFFFFF" CornerRadius="12" BorderBrush="#E2E6F0" BorderThickness="1">
+            <!-- Левая часть -->
+            <Border Grid.Column="0"
+                    Padding="20"
+                    Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="12,0,0,12"
+                    BorderBrush="{StaticResource PanelBorderBrush}"
+                    BorderThickness="1,1,0,1">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -241,150 +317,131 @@
             </Grid>
         </Border>
 
-        <!-- Правая часть -->
-        <Border Grid.Column="1"
-                Padding="20"
-                Background="#FFFFFF"
-                CornerRadius="12"
-                BorderBrush="#E2E6F0"
-                BorderThickness="1">
-            <ScrollViewer>
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
+            <GridSplitter Grid.Column="1" HorizontalAlignment="Center"/>
 
-                    <StackPanel>
-                        <TextBlock Text="Настройки выделенной группы"
-                                   FontSize="18"
-                                   FontWeight="SemiBold"
-                                   Foreground="#243157"/>
-                        <TextBlock Text="{Binding PointSummary}"
-                                   Foreground="#596684"
-                                   Margin="0,4,0,0"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="Цвет:" VerticalAlignment="Center"/>
-                            <ComboBox Width="160"
-                                      ItemsSource="{Binding DataContext.ColorOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                      SelectedValuePath="Color"
-                                      ItemTemplate="{StaticResource ColorOptionTemplate}"
-                                      SelectedValue="{Binding AccentColor, Mode=TwoWay}"/>
-                            <Border Width="24" Height="24" Margin="10,0,0,0" CornerRadius="4"
-                                    Background="{Binding AccentBrush}" BorderBrush="#8895B1" BorderThickness="1"/>
+            <!-- Правая часть -->
+            <Border Grid.Column="2"
+                    Padding="20"
+                    Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="0,12,12,0"
+                    BorderBrush="{StaticResource PanelBorderBrush}"
+                    BorderThickness="0,1,1,1">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid>
+                        <StackPanel HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Margin="0,80,0,0">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasSelectedGroup}" Value="False">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Text="Выберите группу слева"
+                                       FontSize="16"
+                                       Foreground="{StaticResource SecondaryTextBrush}"/>
                         </StackPanel>
-                        <CheckBox Content="Включить в расчёты"
-                                  Margin="0,12,0,0"
-                                  IsChecked="{Binding IsIncluded, Mode=TwoWay}"/>
-                    </StackPanel>
 
-                    <Separator Grid.Row="1" Margin="0,16"/>
+                        <StackPanel Margin="0"
+                                    DataContext="{Binding SelectedGroup}">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasSelectedGroup, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
 
-                    <ListBox Grid.Row="2"
-                             ItemsSource="{Binding SelectedGroupRows}"
-                             Background="Transparent"
-                             BorderThickness="0"
-                             SelectionMode="Multiple">
-                        <ListBox.ItemContainerStyle>
-                            <Style TargetType="ListBoxItem">
-                                <Setter Property="Padding" Value="0"/>
-                                <Setter Property="Margin" Value="0,0,0,8"/>
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                <Setter Property="VerticalContentAlignment" Value="Stretch"/>
-                                <Setter Property="Cursor" Value="Hand"/>
-                                <Setter Property="IsSelected" Value="{Binding IsHighlighted, Mode=TwoWay}"/>
-                            </Style>
-                        </ListBox.ItemContainerStyle>
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Border Padding="10"
-                                        Background="#F8FAFF"
-                                        BorderBrush="#E1E6F5"
-                                        BorderThickness="1"
-                                        CornerRadius="8">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#F8FAFF"/>
-                                            <Setter Property="BorderBrush" Value="#E1E6F5"/>
-                                            <Setter Property="BorderThickness" Value="1"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
-                                                    <Setter Property="Background" Value="#EBF1FF"/>
-                                                    <Setter Property="BorderBrush" Value="{Binding AccentBrush}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <CheckBox Grid.Column="0"
-                                                  Margin="0,0,12,0"
-                                                  VerticalAlignment="Center"
-                                                  Focusable="False"
-                                                  IsChecked="{Binding IsIncluded, Mode=TwoWay}"/>
-                                        <Border Grid.Column="1"
-                                                Width="12"
-                                                Height="12"
-                                                Margin="0,0,12,0"
-                                                CornerRadius="3"
-                                                Background="{Binding AccentBrush}"
-                                                BorderBrush="#8895B1"
-                                                BorderThickness="1"/>
-                                        <TextBlock Grid.Column="2"
-                                                   Text="{Binding Name}"
-                                                   VerticalAlignment="Center"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="#243157"/>
-                                        <TextBlock Grid.Column="3"
-                                                   Text="{Binding CycleRanges}"
-                                                   Margin="16,0,0,0"
-                                                   VerticalAlignment="Center"
-                                                   Foreground="#596684"/>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                        <ListBox.Style>
-                            <Style TargetType="ListBox">
-                                <Setter Property="Template">
-                                    <Setter.Value>
-                                        <ControlTemplate TargetType="ListBox">
-                                            <ItemsPresenter/>
-                                        </ControlTemplate>
-                                    </Setter.Value>
-                                </Setter>
-                                <Setter Property="Background" Value="Transparent"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasSelectedGroup}" Value="False">
-                                        <Setter Property="Template">
-                                            <Setter.Value>
-                                                <ControlTemplate TargetType="ListBox">
-                                                    <Border Padding="12"
-                                                            Background="#F8FAFF"
-                                                            BorderBrush="#E1E6F5"
-                                                            BorderThickness="1"
-                                                            CornerRadius="8">
-                                                        <TextBlock Text="Выберите группу слева"
-                                                                   HorizontalAlignment="Center"
-                                                                   VerticalAlignment="Center"
-                                                                   Foreground="#6C7899"/>
-                                                    </Border>
-                                                </ControlTemplate>
-                                            </Setter.Value>
-                                        </Setter>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ListBox.Style>
-                    </ListBox>
-                </Grid>
-            </ScrollViewer>
-        </Border>
+                            <TextBlock Text="{Binding Name}"
+                                       FontSize="20"
+                                       FontWeight="SemiBold"
+                                       Foreground="#1D2747"/>
+                            <TextBlock Text="{Binding PointSummary}"
+                                       Margin="0,6,0,0"
+                                       Foreground="{StaticResource SecondaryTextBrush}"
+                                       TextWrapping="Wrap"/>
+
+                            <StackPanel Orientation="Horizontal"
+                                        Margin="0,18,0,0"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="Цвет:" VerticalAlignment="Center" Foreground="#3F4B6B"/>
+                                <ComboBox Width="180"
+                                          Margin="12,0,0,0"
+                                          ItemsSource="{Binding DataContext.ColorOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                          SelectedValuePath="Color"
+                                          SelectedValue="{Binding AccentColor, Mode=TwoWay}"
+                                          ItemTemplate="{StaticResource ColorOptionTemplate}"/>
+                                <Border Width="28"
+                                        Height="28"
+                                        Margin="12,0,0,0"
+                                        CornerRadius="6"
+                                        Background="{Binding AccentBrush}"
+                                        BorderBrush="#8895B1"
+                                        BorderThickness="1"/>
+                            </StackPanel>
+
+                            <CheckBox Content="Включить в расчёты"
+                                      Margin="0,14,0,0"
+                                      IsChecked="{Binding IsIncluded, Mode=TwoWay}"/>
+
+                            <Separator Margin="0,20,0,16"/>
+
+                            <TextBlock Text="Точки группы"
+                                       FontWeight="SemiBold"
+                                       Foreground="#243157"/>
+
+                            <ItemsControl ItemsSource="{Binding Points}"
+                                          ItemTemplate="{StaticResource GroupPointTemplate}"
+                                          Margin="0,12,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+
+                                <ItemsControl.Style>
+                                    <Style TargetType="ItemsControl">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Points.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ItemsControl.Style>
+                            </ItemsControl>
+
+                            <Border Padding="12"
+                                    Margin="0,12,0,0"
+                                    Background="#F8FAFF"
+                                    BorderBrush="#E1E6F5"
+                                    BorderThickness="1"
+                                    CornerRadius="8">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Points.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="В группе пока нет точек"
+                                           HorizontalAlignment="Center"
+                                           Foreground="{StaticResource SecondaryTextBrush}"/>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

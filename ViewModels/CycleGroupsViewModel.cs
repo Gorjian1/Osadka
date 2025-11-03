@@ -29,26 +29,27 @@ namespace Osadka.ViewModels
         public ObservableCollection<CycleColumnHeader> Columns { get; } = new();
         public ObservableCollection<CycleGroupRow> Rows { get; } = new();
         public ObservableCollection<CycleGroupSettingsEntry> Settings { get; } = new();
-        public ReadOnlyObservableCollection<CycleGroupSettingsEntry> SelectedGroupRows { get; }
         public ObservableCollection<ColorOption> ColorOptions { get; }
+
+        [ObservableProperty]
+        private CycleGroupSettingsEntry? _selectedGroup;
 
         public bool HasData => Rows.Count > 0;
         public int CycleCount => Columns.Count;
-        public bool HasSelectedGroup => SelectedGroupRows.Count > 0;
+        public bool HasSelectedGroup => SelectedGroup is not null;
 
         public CycleGroupsViewModel(RawDataViewModel raw)
         {
             _raw = raw ?? throw new ArgumentNullException(nameof(raw));
 
             ColorOptions = new ObservableCollection<ColorOption>(BuildColorOptions());
-            SelectedGroupRows = new ReadOnlyObservableCollection<CycleGroupSettingsEntry>(Settings);
 
             Columns.CollectionChanged += ColumnsOnCollectionChanged;
-            Settings.CollectionChanged += SettingsOnCollectionChanged;
 
             _raw.CycleGroups.CollectionChanged += OnGroupsChanged;
             _raw.CycleGroupsChanged += OnCycleGroupsChanged;
             _raw.PropertyChanged += RawOnPropertyChanged;
+            _raw.ActiveFilterChanged += RawOnActiveFilterChanged;
 
             Refresh();
         }
@@ -87,6 +88,8 @@ namespace Osadka.ViewModels
 
         private void Refresh()
         {
+            SelectedGroup = null;
+
             var cycles = _raw.CycleNumbers.Any()
                 ? _raw.CycleNumbers.OrderBy(c => c).ToList()
                 : _raw.CycleGroups
@@ -151,10 +154,10 @@ namespace Osadka.ViewModels
         public void Dispose()
         {
             Columns.CollectionChanged -= ColumnsOnCollectionChanged;
-            Settings.CollectionChanged -= SettingsOnCollectionChanged;
             _raw.CycleGroups.CollectionChanged -= OnGroupsChanged;
             _raw.CycleGroupsChanged -= OnCycleGroupsChanged;
             _raw.PropertyChanged -= RawOnPropertyChanged;
+            _raw.ActiveFilterChanged -= RawOnActiveFilterChanged;
 
             foreach (var row in Rows)
                 row.Dispose();
@@ -170,8 +173,46 @@ namespace Osadka.ViewModels
             OnPropertyChanged(nameof(CycleCount));
         }
 
-        private void SettingsOnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        private void RawOnActiveFilterChanged(object? sender, EventArgs e)
         {
+            SelectedGroup?.RefreshPointsState();
+        }
+
+        public void ToggleGroupSelection(CycleGroupRow row)
+        {
+            if (row is null)
+                return;
+
+            bool isSame = SelectedGroup?.Group == row.Group;
+
+            if (isSame)
+            {
+                ClearSelection();
+                return;
+            }
+
+            ApplySelection(row.Group);
+        }
+
+        private void ApplySelection(CycleStateGroup group)
+        {
+            foreach (var r in Rows)
+                r.IsHighlighted = ReferenceEquals(r.Group, group);
+
+            SelectedGroup = Settings.FirstOrDefault(s => ReferenceEquals(s.Group, group));
+        }
+
+        private void ClearSelection()
+        {
+            foreach (var row in Rows)
+                row.IsHighlighted = false;
+
+            SelectedGroup = null;
+        }
+
+        partial void OnSelectedGroupChanged(CycleGroupSettingsEntry? value)
+        {
+            value?.RefreshPointsState();
             OnPropertyChanged(nameof(HasSelectedGroup));
         }
     }
@@ -218,12 +259,15 @@ namespace Osadka.ViewModels
             Group.PropertyChanged += GroupOnPropertyChanged;
             Group.PointIds.CollectionChanged += PointIdsOnCollectionChanged;
             _row.PropertyChanged += RowOnPropertyChanged;
+
+            RebuildPoints();
         }
 
         public string Name => Group.DisplayName;
         public int PointCount => Group.PointIds.Count;
         public IEnumerable<string> PointIds => Group.PointIds;
         public string CycleRanges => _row.CycleRanges;
+        public ObservableCollection<CycleGroupPointEntry> Points { get; } = new();
 
         public bool IsIncluded
         {
@@ -283,6 +327,24 @@ namespace Osadka.ViewModels
             }
         }
 
+        public void RefreshPointsState()
+        {
+            foreach (var point in Points)
+                point.RefreshState();
+        }
+
+        private void RebuildPoints()
+        {
+            Points.Clear();
+            foreach (var id in Group.PointIds)
+            {
+                if (string.IsNullOrWhiteSpace(id))
+                    continue;
+
+                Points.Add(new CycleGroupPointEntry(id, _raw));
+            }
+        }
+
         private void GroupOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(CycleStateGroup.DisplayName))
@@ -304,6 +366,7 @@ namespace Osadka.ViewModels
         {
             OnPropertyChanged(nameof(PointCount));
             OnPropertyChanged(nameof(PointSummary));
+            RebuildPoints();
         }
 
         public void Dispose()
@@ -311,6 +374,7 @@ namespace Osadka.ViewModels
             Group.PropertyChanged -= GroupOnPropertyChanged;
             Group.PointIds.CollectionChanged -= PointIdsOnCollectionChanged;
             _row.PropertyChanged -= RowOnPropertyChanged;
+            Points.Clear();
         }
 
         private void RowOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -387,7 +451,8 @@ namespace Osadka.ViewModels
                 if (!isBoundary)
                     continue;
 
-                AddSegment(segmentStart, index - 1, currentKind);
+                if (currentKind != CycleStateKind.Missing && currentKind != CycleStateKind.NoAccess)
+                    AddSegment(segmentStart, index - 1, currentKind);
 
                 if (index < Cells.Count)
                 {
@@ -432,7 +497,7 @@ namespace Osadka.ViewModels
         private void UpdateCycleRanges()
         {
             var numbers = Group.States
-                .Where(s => s.Kind != CycleStateKind.Missing)
+                .Where(s => s.Kind != CycleStateKind.Missing && s.Kind != CycleStateKind.NoAccess)
                 .Select(s => s.CycleNumber)
                 .Distinct()
                 .OrderBy(c => c)
@@ -586,10 +651,19 @@ namespace Osadka.ViewModels
         {
             if (_state is null || _state.Kind == CycleStateKind.Missing)
             {
-                Label = "—";
+                Label = string.Empty;
                 Background = Brushes.Transparent;
                 Foreground = Brushes.Gray;
                 ToolTip = $"Цикл {CycleNumber}: нет данных";
+                return;
+            }
+
+            if (_state.Kind == CycleStateKind.NoAccess)
+            {
+                Label = string.Empty;
+                Background = Brushes.Transparent;
+                Foreground = Brushes.Gray;
+                ToolTip = CycleDisplayFormatting.GetToolTip(CycleNumber, "Нет доступа", _state.Annotation);
                 return;
             }
 
@@ -607,7 +681,7 @@ namespace Osadka.ViewModels
         {
             CycleStateKind.Measured => "Изм",
             CycleStateKind.New => "Нов",
-            CycleStateKind.NoAccess => "Нет",
+            CycleStateKind.NoAccess => string.Empty,
             CycleStateKind.Destroyed => "Разр",
             CycleStateKind.Text => "Прим",
             _ => "—"
@@ -659,7 +733,7 @@ namespace Osadka.ViewModels
             {
                 CycleStateKind.Measured => baseColor,
                 CycleStateKind.New => Blend(baseColor, Colors.White, 0.25),
-                CycleStateKind.NoAccess => Blend(baseColor, Colors.Gold, 0.35),
+                CycleStateKind.NoAccess => Colors.Transparent,
                 CycleStateKind.Destroyed => Blend(baseColor, Colors.Black, 0.35),
                 CycleStateKind.Text => Blend(baseColor, Colors.White, 0.45),
                 _ => baseColor
@@ -679,6 +753,26 @@ namespace Osadka.ViewModels
             byte g = (byte)(source.G + (target.G - source.G) * amount);
             byte b = (byte)(source.B + (target.B - source.B) * amount);
             return Color.FromRgb(r, g, b);
+        }
+    }
+
+    public sealed class CycleGroupPointEntry : ObservableObject
+    {
+        private readonly RawDataViewModel _raw;
+
+        public CycleGroupPointEntry(string id, RawDataViewModel raw)
+        {
+            Id = id ?? throw new ArgumentNullException(nameof(id));
+            _raw = raw ?? throw new ArgumentNullException(nameof(raw));
+        }
+
+        public string Id { get; }
+
+        public bool IsIncluded => !_raw.DisabledPoints.Contains(Id);
+
+        internal void RefreshState()
+        {
+            OnPropertyChanged(nameof(IsIncluded));
         }
     }
 }

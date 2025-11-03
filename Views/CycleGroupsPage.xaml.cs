@@ -28,7 +28,7 @@ namespace Osadka.Views
             if (border.DataContext is not CycleGroupRow row)
                 return;
 
-            row.IsHighlighted = !row.IsHighlighted;
+            _viewModel.ToggleGroupSelection(row);
             e.Handled = true;
         }
     }
