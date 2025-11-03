@@ -215,11 +215,32 @@ namespace Osadka.ViewModels
                 MeaningGroups.Add(new CycleMeaningGroup(this, k, sameKind));
             }
         }
+
+        public void SortPointIds(IComparer<string> comparer)
+        {
+            if (comparer is null)
+                throw new ArgumentNullException(nameof(comparer));
+
+            if (PointIds.Count <= 1)
+                return;
+
+            var ordered = PointIds.OrderBy(id => id, comparer).ToList();
+
+            if (ordered.SequenceEqual(PointIds))
+                return;
+
+            PointIds.Clear();
+            foreach (var id in ordered)
+                PointIds.Add(id);
+        }
     }
 
 
     public partial class RawDataViewModel : ObservableObject
     {
+        private static readonly Regex PointIdNumberRegex = new("^\\s*(\\d+)", RegexOptions.Compiled);
+        private static readonly IComparer<string> PointIdComparer = Comparer<string>.Create(ComparePointIds);
+
         private bool _suspendRefresh;
         public void SuspendRefresh(bool on) => _suspendRefresh = on;
 
@@ -955,6 +976,7 @@ namespace Osadka.ViewModels
                                          .OrderByDescending(g => g.PointIds.Count)
                                          .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
             {
+                group.SortPointIds(PointIdComparer);
                 group.DisplayName = $"Группа {groupIndex++}";
                 CycleGroups.Add(group);
             }
@@ -1098,6 +1120,40 @@ namespace Osadka.ViewModels
         {
             OnPropertyChanged(nameof(ActiveDataRows));
             OnPropertyChanged(nameof(ActiveCoordRows));
+        }
+
+        private static int ComparePointIds(string? left, string? right)
+        {
+            if (ReferenceEquals(left, right))
+                return 0;
+            if (left is null)
+                return -1;
+            if (right is null)
+                return 1;
+
+            var leftMatch = PointIdNumberRegex.Match(left);
+            var rightMatch = PointIdNumberRegex.Match(right);
+
+            if (leftMatch.Success && rightMatch.Success)
+            {
+                if (int.TryParse(leftMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int leftNumber) &&
+                    int.TryParse(rightMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int rightNumber))
+                {
+                    int cmp = leftNumber.CompareTo(rightNumber);
+                    if (cmp != 0)
+                        return cmp;
+                }
+            }
+            else if (leftMatch.Success)
+            {
+                return -1;
+            }
+            else if (rightMatch.Success)
+            {
+                return 1;
+            }
+
+            return string.Compare(left, right, StringComparison.OrdinalIgnoreCase);
         }
 
         // Небольшая утилита-вопрос для некоторых сценариев импорта
