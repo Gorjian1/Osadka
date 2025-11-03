@@ -267,21 +267,7 @@ namespace Osadka.ViewModels
             }
         }
 
-        public string PointSummary
-        {
-            get
-            {
-                if (Group.PointIds.Count == 0)
-                    return "Нет точек";
-
-                const int PreviewLimit = 4;
-                var preview = Group.PointIds.Take(PreviewLimit).ToList();
-                string joined = string.Join(", ", preview);
-                if (Group.PointIds.Count > PreviewLimit)
-                    joined += $", … (ещё {Group.PointIds.Count - PreviewLimit})";
-                return joined;
-            }
-        }
+        public string PointSummary => _row.PointSummary;
 
         private void GroupOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
@@ -323,6 +309,10 @@ namespace Osadka.ViewModels
             {
                 OnPropertyChanged(nameof(IsHighlighted));
             }
+            else if (e.PropertyName == nameof(CycleGroupRow.PointSummary))
+            {
+                OnPropertyChanged(nameof(PointSummary));
+            }
         }
     }
 
@@ -356,6 +346,7 @@ namespace Osadka.ViewModels
         public int PointCount => Group.PointIds.Count;
         public bool IsIncluded => Group.IsEnabled;
         public Brush Accent => Group.AccentBrush;
+        public string PointSummary => BuildPointSummary();
 
         private void BuildCells()
         {
@@ -503,6 +494,7 @@ namespace Osadka.ViewModels
         private void PointIdsOnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
             OnPropertyChanged(nameof(PointCount));
+            OnPropertyChanged(nameof(PointSummary));
         }
 
         private void StatesOnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -515,6 +507,19 @@ namespace Osadka.ViewModels
             Group.PropertyChanged -= GroupOnPropertyChanged;
             Group.PointIds.CollectionChanged -= PointIdsOnCollectionChanged;
             Group.States.CollectionChanged -= StatesOnCollectionChanged;
+        }
+
+        private string BuildPointSummary()
+        {
+            if (Group.PointIds.Count == 0)
+                return "Нет точек";
+
+            const int PreviewLimit = 6;
+            var preview = Group.PointIds.Take(PreviewLimit).ToList();
+            string joined = string.Join(", ", preview);
+            if (Group.PointIds.Count > PreviewLimit)
+                joined += $", … (ещё {Group.PointIds.Count - PreviewLimit})";
+            return joined;
         }
     }
 
@@ -587,7 +592,7 @@ namespace Osadka.ViewModels
         {
             if (_state is null || _state.Kind == CycleStateKind.Missing)
             {
-                Label = "—";
+                Label = string.Empty;
                 Background = Brushes.Transparent;
                 Foreground = Brushes.Gray;
                 ToolTip = $"Цикл {CycleNumber}: нет данных";
