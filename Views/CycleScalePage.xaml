@@ -22,31 +22,89 @@
         <TextBlock Grid.Row="0" Text="Шкала циклов" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12"/>
 
         <!-- Ось циклов (над левым Гантом) -->
-        <Border Grid.Row="1" Padding="8" Background="#F5F7FB" CornerRadius="6">
-            <ItemsControl ItemsSource="{Binding CycleAxis}"
-                          AlternationCount="{Binding CycleAxis.Count}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <Grid ui:GridHelpers.ColumnsCount="{Binding CycleAxis.Count}"
-                              ui:GridHelpers.SharedGroupPrefix="GanttCycle"/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
+        <Border Grid.Row="1"
+                Padding="12,8"
+                Background="#F5F7FB"
+                CornerRadius="6"
+                BorderBrush="#D8DCE8"
+                BorderThickness="1">
+            <Grid SnapsToDevicePixels="True"
+                  ui:GridHelpers.ColumnsCount="{Binding CycleAxis.Count}"
+                  ui:GridHelpers.SharedGroupPrefix="GanttCycle">
+                <ItemsControl ItemsSource="{Binding CycleAxis}"
+                              AlternationCount="{Binding CycleAxis.Count}"
+                              IsHitTestVisible="False"
+                              Panel.ZIndex="0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Grid ui:GridHelpers.ColumnsCount="{Binding CycleAxis.Count}"
+                                  ui:GridHelpers.SharedGroupPrefix="GanttCycle"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
 
-                <ItemsControl.ItemContainerStyle>
-                    <Style TargetType="ContentPresenter">
-                        <Setter Property="Grid.Column"
-                                Value="{Binding RelativeSource={RelativeSource AncestorType=ItemsControl}, Path=AlternationIndex}"/>
-                    </Style>
-                </ItemsControl.ItemContainerStyle>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Grid.Column"
+                                    Value="{Binding RelativeSource={RelativeSource Self}, Path=(ItemsControl.AlternationIndex)}"/>
+                            <Setter Property="Tag"
+                                    Value="{Binding RelativeSource={RelativeSource Self}, Path=(ItemsControl.AlternationIndex)}"/>
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
 
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Margin="4" Padding="6" Background="#DEE7FF" CornerRadius="4" MinWidth="60">
-                            <TextBlock Text="{Binding}" HorizontalAlignment="Center" FontWeight="SemiBold"/>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#F0F3FA"
+                                    SnapsToDevicePixels="True">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="BorderBrush" Value="#D8DCE8"/>
+                                        <Setter Property="BorderThickness" Value="0,0,1,0"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=ContentPresenter}, Path=Tag}"
+                                                         Value="0">
+                                                <Setter Property="BorderThickness" Value="1,0,1,0"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <ItemsControl ItemsSource="{Binding CycleAxis}"
+                              AlternationCount="{Binding CycleAxis.Count}"
+                              Margin="0"
+                              IsHitTestVisible="False"
+                              Panel.ZIndex="1">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Grid ui:GridHelpers.ColumnsCount="{Binding CycleAxis.Count}"
+                                  ui:GridHelpers.SharedGroupPrefix="GanttCycle"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Grid.Column"
+                                    Value="{Binding RelativeSource={RelativeSource Self}, Path=(ItemsControl.AlternationIndex)}"/>
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="4,0,4,6"
+                                    MinWidth="60"
+                                    SnapsToDevicePixels="True">
+                                <TextBlock Text="{Binding}"
+                                           HorizontalAlignment="Center"
+                                           FontWeight="SemiBold"
+                                           Foreground="#2E3440"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
         </Border>
 
         <!-- Контент: 2 колонки -->
@@ -59,10 +117,10 @@
             </Grid.ColumnDefinitions>
 
             <!-- ЛЕВО: Гант -->
-            <Border Grid.Column="0" BorderBrush="#E1E4EB" BorderThickness="1" CornerRadius="6">
+            <Border Grid.Column="0" BorderBrush="#E1E4EB" BorderThickness="1" CornerRadius="6" SnapsToDevicePixels="True">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <!-- Один ряд на группу: слева её имя, справа полосы -->
-                    <ItemsControl ItemsSource="{Binding Groups}">
+                    <ItemsControl ItemsSource="{Binding DisplayGroups}" AlternationCount="1000">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <VirtualizingStackPanel/>
@@ -71,73 +129,155 @@
 
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Grid Margin="8,6">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="140"/>
-                                        <!-- подпись группы -->
-                                        <ColumnDefinition Width="*"/>
-                                        <!-- полосы -->
-                                    </Grid.ColumnDefinitions>
+                                <Border Background="White"
+                                        SnapsToDevicePixels="True">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Padding" Value="8,6"/>
+                                            <Setter Property="BorderBrush" Value="#D8DCE8"/>
+                                            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding RowIndex}" Value="0">
+                                                    <Setter Property="BorderThickness" Value="0,1,0,1"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="160"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
 
-                                    <!-- подпись группы -->
-                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="SemiBold">
-                                        <TextBlock.Text>
-                                            <PriorityBinding>
-                                                <Binding Path="DisplayName"/>
-                                                <Binding Source="Группа"/>
-                                            </PriorityBinding>
-                                        </TextBlock.Text>
-                                    </TextBlock>
-
-
-                                    <!-- Полосы Ганта (склеенные сегменты) -->
-                                    <Grid Grid.Column="1"
-                                          ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleAxis.Count, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                          ui:GridHelpers.SharedGroupPrefix="GanttCycle">
-                                        <!-- Сегменты -->
-                                        <ItemsControl ItemsSource="{Binding Segments}"
-                                                      AlternationCount="{Binding DataContext.CycleAxis.Count, RelativeSource={RelativeSource AncestorType=UserControl}}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleAxis.Count, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                          ui:GridHelpers.SharedGroupPrefix="GanttCycle"/>
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-
-                                            <ItemsControl.ItemContainerStyle>
-                                                <Style TargetType="ContentPresenter">
-                                                    <Setter Property="Grid.Column" Value="{Binding StartIndex}"/>
-                                                    <Setter Property="Grid.ColumnSpan" Value="{Binding Span}"/>
+                                        <Border Grid.Column="0"
+                                                Background="#F7F9FD"
+                                                BorderBrush="#D8DCE8"
+                                                Padding="0,0,10,0"
+                                                SnapsToDevicePixels="True">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="BorderThickness" Value="0,0,1,0"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding RowIndex}" Value="0">
+                                                            <Setter Property="BorderThickness" Value="0,1,1,0"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
                                                 </Style>
-                                            </ItemsControl.ItemContainerStyle>
+                                            </Border.Style>
+                                            <TextBlock VerticalAlignment="Center"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#1F2430"
+                                                       TextWrapping="Wrap"
+                                                       Text="{Binding Title}"/>
+                                        </Border>
 
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Border Height="28" Margin="2" CornerRadius="4" Background="{Binding Brush}">
-                                                        <Border.ToolTip>
-                                                            <StackPanel>
-                                                                <TextBlock>
-                                                                    <Run Text="Циклы: "/>
-                                                                    <Run Text="{Binding CycleFrom}"/>
-                                                                    <Run Text="–"/>
-                                                                    <Run Text="{Binding CycleTo}"/>
-                                                                </TextBlock>
-                                                                <TextBlock Text="{Binding Annotation}" TextWrapping="Wrap"/>
-                                                            </StackPanel>
-                                                        </Border.ToolTip>
-                                                    </Border>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
+                                        <Grid Grid.Column="1"
+                                              Background="#FFFFFF"
+                                              ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleAxis.Count, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              ui:GridHelpers.SharedGroupPrefix="GanttCycle"
+                                              SnapsToDevicePixels="True">
+                                            <ItemsControl ItemsSource="{Binding DataContext.CycleAxis, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                          AlternationCount="{Binding DataContext.CycleAxis.Count, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                          IsHitTestVisible="False"
+                                                          Panel.ZIndex="0">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleAxis.Count, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                              ui:GridHelpers.SharedGroupPrefix="GanttCycle"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+
+                                                <ItemsControl.ItemContainerStyle>
+                                                    <Style TargetType="ContentPresenter">
+                                                        <Setter Property="Grid.Column"
+                                                                Value="{Binding RelativeSource={RelativeSource Self}, Path=(ItemsControl.AlternationIndex)}"/>
+                                                        <Setter Property="Tag"
+                                                                Value="{Binding RelativeSource={RelativeSource Self}, Path=(ItemsControl.AlternationIndex)}"/>
+                                                    </Style>
+                                                </ItemsControl.ItemContainerStyle>
+
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="#FBFCFF"
+                                                                SnapsToDevicePixels="True">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="BorderBrush" Value="#D8DCE8"/>
+                                                                    <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=ContentPresenter}, Path=Tag}"
+                                                                                     Value="0">
+                                                                            <Setter Property="BorderThickness" Value="1,0,1,1"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding DataContext.RowIndex, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                     Value="0">
+                                                                            <Setter Property="BorderThickness" Value="0,1,1,1"/>
+                                                                        </DataTrigger>
+                                                                        <MultiDataTrigger>
+                                                                            <MultiDataTrigger.Conditions>
+                                                                                <Condition Binding="{Binding RelativeSource={RelativeSource AncestorType=ContentPresenter}, Path=Tag}" Value="0"/>
+                                                                                <Condition Binding="{Binding DataContext.RowIndex, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="0"/>
+                                                                            </MultiDataTrigger.Conditions>
+                                                                            <Setter Property="BorderThickness" Value="1,1,1,1"/>
+                                                                        </MultiDataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            <ItemsControl ItemsSource="{Binding Segments}"
+                                                          Panel.ZIndex="1">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleAxis.Count, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                              ui:GridHelpers.SharedGroupPrefix="GanttCycle"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+
+                                                <ItemsControl.ItemContainerStyle>
+                                                    <Style TargetType="ContentPresenter">
+                                                        <Setter Property="Grid.Column" Value="{Binding StartIndex}"/>
+                                                        <Setter Property="Grid.ColumnSpan" Value="{Binding Span}"/>
+                                                        <Setter Property="VerticalAlignment" Value="Stretch"/>
+                                                    </Style>
+                                                </ItemsControl.ItemContainerStyle>
+
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Height="28"
+                                                                Margin="4"
+                                                                CornerRadius="4"
+                                                                Background="{Binding Brush}"
+                                                                VerticalAlignment="Center"
+                                                                SnapsToDevicePixels="True">
+                                                            <Border.ToolTip>
+                                                                <StackPanel>
+                                                                    <TextBlock>
+                                                                        <Run Text="Циклы: "/>
+                                                                        <Run Text="{Binding CycleFrom}"/>
+                                                                        <Run Text="–"/>
+                                                                        <Run Text="{Binding CycleTo}"/>
+                                                                    </TextBlock>
+                                                                    <TextBlock Text="{Binding Annotation}" TextWrapping="Wrap"/>
+                                                                </StackPanel>
+                                                            </Border.ToolTip>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Grid>
                                     </Grid>
-                                </Grid>
+                                </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </ScrollViewer>
             </Border>
 
-            <!-- ПРАВО: список групп + легенда -->
+            <!-- ПРАВО: список групп -->
             <ScrollViewer Grid.Column="1" Margin="16,0,0,0" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
 
@@ -175,23 +315,6 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-
-                    <Border Padding="10" Background="#F7F9FC" CornerRadius="6" BorderBrush="#D5D9E3" BorderThickness="1">
-                        <StackPanel>
-                            <TextBlock Text="Легенда" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                            <ItemsControl ItemsSource="{Binding LegendItems}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" Margin="8,4">
-                                            <Rectangle Width="18" Height="18" Fill="{Binding Brush}" Stroke="#33000000" StrokeThickness="1" Margin="0,0,6,0"/>
-                                            <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </Border>
-
                 </StackPanel>
             </ScrollViewer>
         </Grid>
