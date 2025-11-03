@@ -166,6 +166,35 @@ namespace Osadka.ViewModels
         [ObservableProperty]
         private bool _isEnabled = true;
 
+        private bool _suppressColorFlag;
+
+        [ObservableProperty]
+        private Color _accentColor = Color.FromRgb(0x4C, 0xAF, 0x50);
+
+        [ObservableProperty]
+        private bool _hasCustomColor;
+
+        public SolidColorBrush AccentBrush => new SolidColorBrush(AccentColor);
+
+        public void SetAccentColor(Color color, bool markCustom)
+        {
+            _suppressColorFlag = true;
+            AccentColor = color;
+            HasCustomColor = markCustom;
+            _suppressColorFlag = false;
+            OnPropertyChanged(nameof(AccentBrush));
+        }
+
+        partial void OnAccentColorChanged(Color value)
+        {
+            if (!_suppressColorFlag)
+            {
+                HasCustomColor = true;
+            }
+
+            OnPropertyChanged(nameof(AccentBrush));
+        }
+
         public void RebuildSegments()
         {
             foreach (var meaning in MeaningGroups)
@@ -1112,7 +1141,7 @@ namespace Osadka.ViewModels
             SetGroupEnabled(group, !group.IsEnabled);
         }
 
-        private void SetGroupEnabled(CycleStateGroup group, bool enable)
+        public void SetGroupEnabled(CycleStateGroup group, bool enable)
         {
             if (group is null) return;
 
