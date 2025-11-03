@@ -47,39 +47,68 @@
             </Border>
         </DataTemplate>
         <DataTemplate x:Key="GroupRowTemplate" DataType="vm:CycleGroupRow">
-            <Grid x:Name="RowRoot" Margin="0,0,0,12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="4*"/>
-                </Grid.ColumnDefinitions>
+            <Border x:Name="RowContainer"
+                    Margin="0,0,0,12"
+                    Background="Transparent"
+                    CornerRadius="10"
+                    MouseLeftButtonUp="OnRowClicked">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="BorderBrush" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="Cursor" Value="Hand"/>
+                        <Setter Property="Padding" Value="0"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                <Setter Property="BorderBrush" Value="{Binding Accent}"/>
+                                <Setter Property="BorderThickness" Value="1.5"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="4*"/>
+                    </Grid.ColumnDefinitions>
 
-                <!-- Левая колонка (заголовок группы) -->
-                <Border Grid.Column="0"
-                        Background="#F8FAFF"
-                        BorderBrush="#E1E6F5"
-                        BorderThickness="0,0,1,1"
-                        Padding="8"
-                        CornerRadius="8,0,0,8">
-                    <StackPanel>
-                        <TextBlock Text="{Binding Name}" Style="{StaticResource RowHeaderText}"/>
-                        <TextBlock Text="{Binding PointSummary}"
-                                   Foreground="#3F4B6B"
-                                   FontSize="12"
-                                   Margin="0,4,0,0"/>
-                        <TextBlock Text="{Binding PointCount, StringFormat='элементов: {0}'}"
-                                   Foreground="#6C7899" FontSize="12"
-                                   Margin="0,2,0,0"/>
-                    </StackPanel>
-                </Border>
+                    <!-- Левая колонка (заголовок группы) -->
+                    <Border Grid.Column="0">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="#F8FAFF"/>
+                                <Setter Property="BorderBrush" Value="#E1E6F5"/>
+                                <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                                <Setter Property="Padding" Value="8"/>
+                                <Setter Property="CornerRadius" Value="8,0,0,8"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                        <Setter Property="Background" Value="#E8F0FF"/>
+                                        <Setter Property="BorderBrush" Value="{Binding Accent}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel>
+                            <TextBlock Text="{Binding Name}" Style="{StaticResource RowHeaderText}"/>
+                            <TextBlock Text="{Binding PointSummary}"
+                                       Foreground="#3F4B6B"
+                                       FontSize="12"
+                                       Margin="0,4,0,0"/>
+                            <TextBlock Text="{Binding PointCount, StringFormat='элементов: {0}'}"
+                                       Foreground="#6C7899" FontSize="12"
+                                       Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Border>
 
-                <!-- Правая колонка (ячейки цикла) -->
-                <Grid Grid.Column="1" Margin="12,0,0,0">
-                    <Grid>
-                        <ItemsControl ItemsSource="{Binding DataContext.Columns, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                      AlternationCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}, FallbackValue=1}"
-                                      IsHitTestVisible="False">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
+                    <!-- Правая колонка (ячейки цикла) -->
+                    <Grid Grid.Column="1" Margin="12,0,0,0">
+                        <Grid>
+                            <ItemsControl ItemsSource="{Binding DataContext.Columns, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                          AlternationCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}, FallbackValue=1}"
+                                          IsHitTestVisible="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
                                     <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                           ui:GridHelpers.SharedGroupPrefix="CycleColumn"/>
                                 </ItemsPanelTemplate>
@@ -116,7 +145,7 @@
                         </ItemsControl>
                     </Grid>
                 </Grid>
-            </Grid>
+            </Border>
         </DataTemplate>
 
         <!-- Цвета в правой панели -->
@@ -251,37 +280,90 @@
 
                     <Separator Grid.Row="1" Margin="0,16"/>
 
-                    <ItemsControl Grid.Row="2"
-                                  ItemsSource="{Binding SelectedGroupRows}">
-                        <ItemsControl.ItemTemplate>
+                    <ListBox Grid.Row="2"
+                             ItemsSource="{Binding SelectedGroupRows}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             SelectionMode="Multiple">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="Margin" Value="0,0,0,8"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Cursor" Value="Hand"/>
+                                <Setter Property="IsSelected" Value="{Binding IsHighlighted, Mode=TwoWay}"/>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Border Padding="12"
-                                        Margin="0,0,0,8"
+                                <Border Padding="10"
                                         Background="#F8FAFF"
                                         BorderBrush="#E1E6F5"
                                         BorderThickness="1"
                                         CornerRadius="8">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding GroupName}"
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#F8FAFF"/>
+                                            <Setter Property="BorderBrush" Value="#E1E6F5"/>
+                                            <Setter Property="BorderThickness" Value="1"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                                    <Setter Property="Background" Value="#EBF1FF"/>
+                                                    <Setter Property="BorderBrush" Value="{Binding AccentBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox Grid.Column="0"
+                                                  Margin="0,0,12,0"
+                                                  VerticalAlignment="Center"
+                                                  Focusable="False"
+                                                  IsChecked="{Binding IsIncluded, Mode=TwoWay}"/>
+                                        <Border Grid.Column="1"
+                                                Width="12"
+                                                Height="12"
+                                                Margin="0,0,12,0"
+                                                CornerRadius="3"
+                                                Background="{Binding AccentBrush}"
+                                                BorderBrush="#8895B1"
+                                                BorderThickness="1"/>
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding Name}"
+                                                   VerticalAlignment="Center"
                                                    FontWeight="SemiBold"
-                                                   FontSize="16"
                                                    Foreground="#243157"/>
-                                        <TextBlock Text="{Binding Detail}"
-                                                   Foreground="#596684"
-                                                   Margin="0,4,0,0"/>
-                                    </StackPanel>
+                                        <TextBlock Grid.Column="3"
+                                                   Text="{Binding CycleRanges}"
+                                                   Margin="16,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="#596684"/>
+                                    </Grid>
                                 </Border>
                             </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-
-                        <!-- Подсветка пустого списка -->
-                        <ItemsControl.Style>
-                            <Style TargetType="ItemsControl">
+                        </ListBox.ItemTemplate>
+                        <ListBox.Style>
+                            <Style TargetType="ListBox">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBox">
+                                            <ItemsPresenter/>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter Property="Background" Value="Transparent"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding HasSelectedGroup}" Value="False">
                                         <Setter Property="Template">
                                             <Setter.Value>
-                                                <ControlTemplate TargetType="ItemsControl">
+                                                <ControlTemplate TargetType="ListBox">
                                                     <Border Padding="12"
                                                             Background="#F8FAFF"
                                                             BorderBrush="#E1E6F5"
@@ -298,8 +380,8 @@
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
-                        </ItemsControl.Style>
-                    </ItemsControl>
+                        </ListBox.Style>
+                    </ListBox>
                 </Grid>
             </ScrollViewer>
         </Border>
