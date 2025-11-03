@@ -51,67 +51,63 @@
         <DataTemplate x:Key="GroupRowTemplate" DataType="vm:CycleGroupRow">
             <Grid x:Name="RowRoot" Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="240"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="4*"/>
                 </Grid.ColumnDefinitions>
-                <Border Background="{Binding Accent}"
-                        Opacity="0.18"
-                        CornerRadius="8"
-                        Margin="0,0,12,0"/>
+
+                <!-- Левая колонка (заголовок группы) -->
                 <Border Grid.Column="0"
-                        Margin="0,0,12,0"
-                        Padding="12"
-                        CornerRadius="8"
-                        BorderBrush="#CBD3E3"
-                        BorderThickness="1"
-                        Background="White">
+                        Background="#F8FAFF"
+                        BorderBrush="#E1E6F5"
+                        BorderThickness="0,0,1,1"
+                        Padding="8"
+                        CornerRadius="8,0,0,8">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource RowHeaderText}"
-                                   Text="{Binding Name}"/>
-                        <TextBlock Text="{Binding PointCount, StringFormat='Точек: {0}'}"
-                                   Foreground="#54627B"
-                                   Margin="0,6,0,0"/>
-                        <Border Margin="0,10,0,0"
-                                Height="4"
-                                CornerRadius="2"
-                                Background="{Binding Accent}"/>
+                        <TextBlock Text="{Binding GroupName}" Style="{StaticResource RowHeaderText}"/>
+                        <TextBlock Text="{Binding ItemCount, StringFormat='элементов: {0}'}"
+                                   Foreground="#6C7899" FontSize="12"/>
                     </StackPanel>
                 </Border>
+
+                <!-- Правая колонка (ячейки цикла) -->
                 <ItemsControl Grid.Column="1"
                               ItemsSource="{Binding Cells}"
                               ItemTemplate="{StaticResource CycleCellTemplate}"
                               ItemsPanel="{StaticResource CycleRowPanel}"/>
-                <Grid.Triggers>
-                    <DataTrigger Binding="{Binding IsIncluded}" Value="False">
-                        <Setter TargetName="RowRoot" Property="Opacity" Value="0.45"/>
-                    </DataTrigger>
-                </Grid.Triggers>
             </Grid>
         </DataTemplate>
+
+        <!-- Цвета в правой панели -->
         <DataTemplate x:Key="ColorOptionTemplate" DataType="vm:ColorOption">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <Border Width="16" Height="16" CornerRadius="3" Background="{Binding Brush}" BorderBrush="#303030" BorderThickness="0.5"/>
-                <TextBlock Text="{Binding Name}"/>
+            <StackPanel Orientation="Horizontal">
+                <Border Width="16" Height="16" CornerRadius="3"
+                        Background="{Binding Brush}" BorderBrush="#303030" BorderThickness="0.5"/>
+                <TextBlock Text="{Binding Name}"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Center"/>
             </StackPanel>
         </DataTemplate>
+
         <Style TargetType="ScrollViewer">
             <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
             <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
         </Style>
     </UserControl.Resources>
 
-    <Grid ColumnSpacing="16" RowDefinitions="{x:Null}">
+    <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="3*"/>
             <ColumnDefinition Width="2*"/>
         </Grid.ColumnDefinitions>
 
+        <!-- Левая часть -->
         <Border Grid.Column="0" Padding="20" Background="#FFFFFF" CornerRadius="12" BorderBrush="#E2E6F0" BorderThickness="1">
-            <Grid RowDefinitions="{x:Null}">
+            <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
+
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,16" VerticalAlignment="Center">
                     <TextBlock Text="Циклы и группы"
                                FontSize="20"
@@ -121,35 +117,42 @@
                                Margin="6,2,0,0"
                                Foreground="#697597"/>
                 </StackPanel>
+
                 <ScrollViewer Grid.Row="1">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="240"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
 
-                        <Border Grid.Row="0"
-                                Grid.Column="0"
-                                Margin="0,0,12,0"
-                                Padding="12"
-                                Background="#F5F8FF"
-                                BorderBrush="#D0D7E5"
-                                BorderThickness="0,0,1,1"
-                                CornerRadius="8,8,0,0">
-                            <TextBlock Text="Группа"
-                                       FontWeight="SemiBold"
-                                       Foreground="#3F4B6B"/>
-                        </Border>
-                        <ItemsControl Grid.Row="0"
-                                      Grid.Column="1"
-                                      ItemsSource="{Binding Columns}"
-                                      ItemTemplate="{StaticResource CycleHeaderTemplate}"
-                                      ItemsPanel="{StaticResource CycleHeaderPanel}"/>
+                        <!-- Заголовки колонок -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
 
+                            <Border Grid.Row="0"
+                                    Grid.Column="0"
+                                    Margin="0,0,12,0"
+                                    Padding="12"
+                                    Background="#F5F8FF"
+                                    BorderBrush="#D0D7E5"
+                                    BorderThickness="0,0,1,1"
+                                    CornerRadius="8,8,0,0">
+                                <TextBlock Text="Группа"
+                                           FontWeight="SemiBold"
+                                           Foreground="#3F4B6B"/>
+                            </Border>
+
+                            <ItemsControl Grid.Row="0"
+                                          Grid.Column="1"
+                                          ItemsSource="{Binding Columns}"
+                                          ItemTemplate="{StaticResource CycleHeaderTemplate}"
+                                          ItemsPanel="{StaticResource CycleHeaderPanel}"/>
+                        </Grid>
+
+                        <!-- Строки -->
                         <ItemsControl Grid.Row="1"
                                       Grid.ColumnSpan="2"
                                       ItemsSource="{Binding Rows}"
@@ -159,73 +162,86 @@
             </Grid>
         </Border>
 
+        <!-- Правая часть -->
         <Border Grid.Column="1"
                 Padding="20"
                 Background="#FFFFFF"
                 CornerRadius="12"
                 BorderBrush="#E2E6F0"
                 BorderThickness="1">
-            <Grid RowDefinitions="{x:Null}">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-                <StackPanel Margin="0,0,0,16">
-                    <TextBlock Text="Настройки групп"
-                               FontSize="20"
-                               FontWeight="SemiBold"
-                               Foreground="#1D2747"/>
-                    <TextBlock Text="Выберите цвет и участие группы в расчётах"
-                               Foreground="#697597"
-                               Margin="0,4,0,0"/>
-                </StackPanel>
+            <ScrollViewer>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
 
-                <ScrollViewer Grid.Row="1">
-                    <ItemsControl ItemsSource="{Binding Settings}">
+                    <StackPanel>
+                        <TextBlock Text="Настройки выделенной группы"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="#243157"/>
+                        <TextBlock Text="{Binding PointSummary}"
+                                   Foreground="#596684"
+                                   Margin="0,4,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="Цвет:" VerticalAlignment="Center"/>
+                            <ComboBox Width="160"
+                                      ItemsSource="{Binding DataContext.ColorOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      SelectedValuePath="Color"
+                                      ItemTemplate="{StaticResource ColorOptionTemplate}"
+                                      SelectedValue="{Binding AccentColor, Mode=TwoWay}"/>
+                            <Border Width="24" Height="24" Margin="10,0,0,0" CornerRadius="4"
+                                    Background="{Binding AccentBrush}" BorderBrush="#8895B1" BorderThickness="1"/>
+                        </StackPanel>
+                        <CheckBox Content="Включить в расчёты"
+                                  Margin="0,12,0,0"
+                                  IsChecked="{Binding IsIncluded, Mode=TwoWay}"/>
+                    </StackPanel>
+
+                    <Separator Grid.Row="1" Margin="0,16"/>
+
+                    <ItemsControl Grid.Row="2"
+                                  ItemsSource="{Binding SelectedGroupRows}">
                         <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="vm:CycleGroupSettingsEntry">
-                                <Border Padding="14"
-                                        Margin="0,0,0,12"
-                                        Background="#F9FAFE"
-                                        BorderBrush="#D7DDF0"
+                            <DataTemplate>
+                                <Border Padding="12"
+                                        Margin="0,0,0,8"
+                                        Background="#F8FAFF"
+                                        BorderBrush="#E1E6F5"
                                         BorderThickness="1"
-                                        CornerRadius="10">
+                                        CornerRadius="8">
                                     <StackPanel>
-                                        <TextBlock Text="{Binding Name}"
+                                        <TextBlock Text="{Binding GroupName}"
                                                    FontWeight="SemiBold"
                                                    FontSize="16"
                                                    Foreground="#243157"/>
-                                        <TextBlock Text="{Binding PointSummary}"
+                                        <TextBlock Text="{Binding Detail}"
                                                    Foreground="#596684"
                                                    Margin="0,4,0,0"/>
-                                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0" Spacing="10" VerticalAlignment="Center">
-                                            <TextBlock Text="Цвет:" VerticalAlignment="Center"/>
-                                            <ComboBox Width="160"
-                                                      ItemsSource="{Binding DataContext.ColorOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                      SelectedValuePath="Color"
-                                                      ItemTemplate="{StaticResource ColorOptionTemplate}"
-                                                      SelectedValue="{Binding AccentColor, Mode=TwoWay}"/>
-                                            <Border Width="20" Height="20" CornerRadius="4" Background="{Binding AccentBrush}" BorderBrush="#8895B1" BorderThickness="1"/>
-                                        </StackPanel>
-                                        <CheckBox Content="Включить в расчёты"
-                                                  Margin="0,12,0,0"
-                                                  IsChecked="{Binding IsIncluded, Mode=TwoWay}"/>
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
+
+                        <!-- Подсветка пустого списка -->
                         <ItemsControl.Style>
                             <Style TargetType="ItemsControl">
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Settings.Count}" Value="0">
+                                    <DataTrigger Binding="{Binding HasSelectedGroup}" Value="False">
                                         <Setter Property="Template">
                                             <Setter.Value>
                                                 <ControlTemplate TargetType="ItemsControl">
-                                                    <Border Padding="40" Background="#FBFCFF" CornerRadius="12" BorderBrush="#E0E6F8" BorderThickness="1">
-                                                        <TextBlock Text="Группы не найдены для выбранного объекта"
-                                                                   Foreground="#7684A6"
+                                                    <Border Padding="12"
+                                                            Background="#F8FAFF"
+                                                            BorderBrush="#E1E6F5"
+                                                            BorderThickness="1"
+                                                            CornerRadius="8">
+                                                        <TextBlock Text="Выберите группу слева"
                                                                    HorizontalAlignment="Center"
-                                                                   VerticalAlignment="Center"/>
+                                                                   VerticalAlignment="Center"
+                                                                   Foreground="#6C7899"/>
                                                     </Border>
                                                 </ControlTemplate>
                                             </Setter.Value>
@@ -235,8 +251,8 @@
                             </Style>
                         </ItemsControl.Style>
                     </ItemsControl>
-                </ScrollViewer>
-            </Grid>
+                </Grid>
+            </ScrollViewer>
         </Border>
     </Grid>
 </UserControl>
