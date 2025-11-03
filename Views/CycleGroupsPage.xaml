@@ -35,9 +35,11 @@
         </ItemsPanelTemplate>
         <DataTemplate x:Key="CycleSegmentTemplate" DataType="vm:CycleGroupSegment">
             <Border Background="{Binding Background}"
-                    CornerRadius="8"
-                    Margin="2,6"
-                    MinHeight="40"
+                    CornerRadius="6"
+                    Margin="2,4"
+                    MinHeight="20"
+                    Height="24"
+                    VerticalAlignment="Center"
                     ToolTip="{Binding ToolTip}">
                 <TextBlock Text="{Binding Label}"
                            Foreground="{Binding Foreground}"

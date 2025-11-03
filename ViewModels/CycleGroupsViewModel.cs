@@ -378,27 +378,46 @@ namespace Osadka.ViewModels
             if (Cells.Count == 0)
                 return;
 
-            int segmentStart = 0;
-            CycleStateKind currentKind = Cells[0].Kind;
+            int firstActual = -1;
+            int lastActual = -1;
 
-            for (int index = 1; index <= Cells.Count; index++)
+            for (int i = 0; i < Cells.Count; i++)
             {
-                bool isBoundary = index == Cells.Count || Cells[index].Kind != currentKind;
-                if (!isBoundary)
+                if (Cells[i].Kind == CycleStateKind.Missing)
+                    continue;
+
+                if (firstActual == -1)
+                    firstActual = i;
+
+                lastActual = i;
+            }
+
+            if (firstActual == -1)
+                return;
+
+            int segmentStart = firstActual;
+            CycleStateKind currentKind = Cells[firstActual].Kind;
+
+            for (int index = firstActual + 1; index <= lastActual; index++)
+            {
+                var kind = Cells[index].Kind;
+                if (kind == currentKind)
                     continue;
 
                 AddSegment(segmentStart, index - 1, currentKind);
 
-                if (index < Cells.Count)
-                {
-                    segmentStart = index;
-                    currentKind = Cells[index].Kind;
-                }
+                segmentStart = index;
+                currentKind = kind;
             }
+
+            AddSegment(segmentStart, lastActual, currentKind);
         }
 
         private void AddSegment(int startIndex, int endIndex, CycleStateKind kind)
         {
+            if (kind == CycleStateKind.Missing)
+                return;
+
             var firstCell = Cells[startIndex];
             var lastCell = Cells[endIndex];
             int length = endIndex - startIndex + 1;
