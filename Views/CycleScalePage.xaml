@@ -62,7 +62,7 @@
             <Border Grid.Column="0" BorderBrush="#E1E4EB" BorderThickness="1" CornerRadius="6">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <!-- Один ряд на группу: слева её имя, справа полосы -->
-                    <ItemsControl ItemsSource="{Binding Groups}">
+                    <ItemsControl ItemsSource="{Binding DisplayGroups}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <VirtualizingStackPanel/>
@@ -80,14 +80,12 @@
                                     </Grid.ColumnDefinitions>
 
                                     <!-- подпись группы -->
-                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="SemiBold">
-                                        <TextBlock.Text>
-                                            <PriorityBinding>
-                                                <Binding Path="DisplayName"/>
-                                                <Binding Source="Группа"/>
-                                            </PriorityBinding>
-                                        </TextBlock.Text>
-                                    </TextBlock>
+                                    <TextBlock Grid.Column="0"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,10,0"
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding Title}"/>
 
 
                                     <!-- Полосы Ганта (склеенные сегменты) -->
@@ -137,7 +135,7 @@
                 </ScrollViewer>
             </Border>
 
-            <!-- ПРАВО: список групп + легенда -->
+            <!-- ПРАВО: список групп -->
             <ScrollViewer Grid.Column="1" Margin="16,0,0,0" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
 
@@ -175,23 +173,6 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-
-                    <Border Padding="10" Background="#F7F9FC" CornerRadius="6" BorderBrush="#D5D9E3" BorderThickness="1">
-                        <StackPanel>
-                            <TextBlock Text="Легенда" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                            <ItemsControl ItemsSource="{Binding LegendItems}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" Margin="8,4">
-                                            <Rectangle Width="18" Height="18" Fill="{Binding Brush}" Stroke="#33000000" StrokeThickness="1" Margin="0,0,6,0"/>
-                                            <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </Border>
-
                 </StackPanel>
             </ScrollViewer>
         </Grid>
