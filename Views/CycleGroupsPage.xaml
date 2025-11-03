@@ -145,6 +145,7 @@
                         </ItemsControl>
                     </Grid>
                 </Grid>
+                </Grid>
             </Border>
         </DataTemplate>
 
