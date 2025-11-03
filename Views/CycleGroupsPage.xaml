@@ -4,6 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:Osadka.ViewModels"
+             xmlns:ui="clr-namespace:Osadka.UI"
              mc:Ignorable="d"
              d:DesignWidth="1280"
              d:DesignHeight="720">
@@ -15,7 +16,7 @@
         </Style>
         <DataTemplate x:Key="CycleHeaderTemplate" DataType="vm:CycleColumnHeader">
             <Border BorderBrush="#D0D7E5"
-                    BorderThickness="0,0,1,1"
+                    BorderThickness="0,0,1,0"
                     Background="#F5F8FF"
                     Padding="8"
                     MinWidth="88"
@@ -29,27 +30,24 @@
             </Border>
         </DataTemplate>
         <ItemsPanelTemplate x:Key="CycleHeaderPanel">
-            <UniformGrid Rows="1"/>
+            <Grid ui:GridHelpers.ColumnsCount="{Binding CycleCount}"
+                  ui:GridHelpers.SharedGroupPrefix="CycleColumn"/>
         </ItemsPanelTemplate>
-        <ItemsPanelTemplate x:Key="CycleRowPanel">
-            <UniformGrid Rows="1"/>
-        </ItemsPanelTemplate>
-        <DataTemplate x:Key="CycleCellTemplate" DataType="vm:CycleDisplayCell">
-            <Border BorderBrush="#D9DEEA"
-                    BorderThickness="0,0,1,1"
-                    Background="{Binding Background}"
-                    MinWidth="88"
+        <DataTemplate x:Key="CycleSegmentTemplate" DataType="vm:CycleGroupSegment">
+            <Border Background="{Binding Background}"
+                    CornerRadius="8"
+                    Margin="2,6"
                     MinHeight="40"
                     ToolTip="{Binding ToolTip}">
                 <TextBlock Text="{Binding Label}"
-                           FontWeight="SemiBold"
                            Foreground="{Binding Foreground}"
+                           FontWeight="SemiBold"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"/>
             </Border>
         </DataTemplate>
         <DataTemplate x:Key="GroupRowTemplate" DataType="vm:CycleGroupRow">
-            <Grid x:Name="RowRoot" Margin="0,0,0,8">
+            <Grid x:Name="RowRoot" Margin="0,0,0,12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="4*"/>
@@ -63,17 +61,61 @@
                         Padding="8"
                         CornerRadius="8,0,0,8">
                     <StackPanel>
-                        <TextBlock Text="{Binding GroupName}" Style="{StaticResource RowHeaderText}"/>
-                        <TextBlock Text="{Binding ItemCount, StringFormat='элементов: {0}'}"
-                                   Foreground="#6C7899" FontSize="12"/>
+                        <TextBlock Text="{Binding Name}" Style="{StaticResource RowHeaderText}"/>
+                        <TextBlock Text="{Binding PointSummary}"
+                                   Foreground="#3F4B6B"
+                                   FontSize="12"
+                                   Margin="0,4,0,0"/>
+                        <TextBlock Text="{Binding PointCount, StringFormat='элементов: {0}'}"
+                                   Foreground="#6C7899" FontSize="12"
+                                   Margin="0,2,0,0"/>
                     </StackPanel>
                 </Border>
 
                 <!-- Правая колонка (ячейки цикла) -->
-                <ItemsControl Grid.Column="1"
-                              ItemsSource="{Binding Cells}"
-                              ItemTemplate="{StaticResource CycleCellTemplate}"
-                              ItemsPanel="{StaticResource CycleRowPanel}"/>
+                <Grid Grid.Column="1" Margin="12,0,0,0">
+                    <Grid>
+                        <ItemsControl ItemsSource="{Binding DataContext.Columns, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      AlternationCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}, FallbackValue=1}"
+                                      IsHitTestVisible="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                          ui:GridHelpers.SharedGroupPrefix="CycleColumn"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="ContentPresenter">
+                                    <Setter Property="Grid.Column" Value="{Binding RelativeSource={RelativeSource Self}, Path=(ItemsControl.AlternationIndex)}"/>
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="#E4E9F5"
+                                            Background="#FDFEFF"
+                                            BorderThickness="0,0,1,0"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <ItemsControl ItemsSource="{Binding Segments}"
+                                      AlternationCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}, FallbackValue=1}"
+                                      ItemTemplate="{StaticResource CycleSegmentTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Grid ui:GridHelpers.ColumnsCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                          ui:GridHelpers.SharedGroupPrefix="CycleColumn"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="ContentPresenter">
+                                    <Setter Property="Grid.Column" Value="{Binding StartIndex}"/>
+                                    <Setter Property="Grid.ColumnSpan" Value="{Binding Length}"/>
+                                    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
+                        </ItemsControl>
+                    </Grid>
+                </Grid>
             </Grid>
         </DataTemplate>
 
@@ -119,7 +161,7 @@
                 </StackPanel>
 
                 <ScrollViewer Grid.Row="1">
-                    <Grid>
+                    <Grid Grid.IsSharedSizeScope="True">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
@@ -149,7 +191,14 @@
                                           Grid.Column="1"
                                           ItemsSource="{Binding Columns}"
                                           ItemTemplate="{StaticResource CycleHeaderTemplate}"
-                                          ItemsPanel="{StaticResource CycleHeaderPanel}"/>
+                                          ItemsPanel="{StaticResource CycleHeaderPanel}"
+                                          AlternationCount="{Binding CycleCount, FallbackValue=1}">
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Grid.Column" Value="{Binding RelativeSource={RelativeSource Self}, Path=(ItemsControl.AlternationIndex)}"/>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                            </ItemsControl>
                         </Grid>
 
                         <!-- Строки -->

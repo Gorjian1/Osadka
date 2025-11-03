@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
+using System.Text;
 using System.Windows.Media;
 
 namespace Osadka.ViewModels
@@ -31,12 +32,15 @@ namespace Osadka.ViewModels
         public ObservableCollection<ColorOption> ColorOptions { get; }
 
         public bool HasData => Rows.Count > 0;
+        public int CycleCount => Columns.Count;
 
         public CycleGroupsViewModel(RawDataViewModel raw)
         {
             _raw = raw ?? throw new ArgumentNullException(nameof(raw));
 
             ColorOptions = new ObservableCollection<ColorOption>(BuildColorOptions());
+
+            Columns.CollectionChanged += ColumnsOnCollectionChanged;
 
             _raw.CycleGroups.CollectionChanged += OnGroupsChanged;
             _raw.CycleGroupsChanged += OnCycleGroupsChanged;
@@ -119,6 +123,8 @@ namespace Osadka.ViewModels
                     : $"Цикл {cycle}";
                 Columns.Add(new CycleColumnHeader(cycle, label));
             }
+
+            OnPropertyChanged(nameof(CycleCount));
         }
 
         private void AssignDefaultColors()
@@ -139,6 +145,7 @@ namespace Osadka.ViewModels
 
         public void Dispose()
         {
+            Columns.CollectionChanged -= ColumnsOnCollectionChanged;
             _raw.CycleGroups.CollectionChanged -= OnGroupsChanged;
             _raw.CycleGroupsChanged -= OnCycleGroupsChanged;
             _raw.PropertyChanged -= RawOnPropertyChanged;
@@ -150,6 +157,11 @@ namespace Osadka.ViewModels
             foreach (var setting in Settings)
                 setting.Dispose();
             Settings.Clear();
+        }
+
+        private void ColumnsOnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            OnPropertyChanged(nameof(CycleCount));
         }
     }
 
@@ -279,6 +291,7 @@ namespace Osadka.ViewModels
 
         public CycleStateGroup Group { get; }
         public ObservableCollection<CycleDisplayCell> Cells { get; } = new();
+        public ObservableCollection<CycleGroupSegment> Segments { get; } = new();
 
         public CycleGroupRow(CycleStateGroup group, IReadOnlyList<int> cycles)
         {
@@ -289,6 +302,7 @@ namespace Osadka.ViewModels
 
             Group.PropertyChanged += GroupOnPropertyChanged;
             Group.PointIds.CollectionChanged += PointIdsOnCollectionChanged;
+            Group.States.CollectionChanged += StatesOnCollectionChanged;
         }
 
         public string Name => Group.DisplayName;
@@ -305,6 +319,66 @@ namespace Osadka.ViewModels
                 map.TryGetValue(cycle, out var state);
                 Cells.Add(new CycleDisplayCell(Group, state, cycle));
             }
+
+            BuildSegments();
+        }
+
+        private void BuildSegments()
+        {
+            Segments.Clear();
+
+            if (Cells.Count == 0)
+                return;
+
+            int segmentStart = 0;
+            CycleStateKind currentKind = Cells[0].Kind;
+
+            for (int index = 1; index <= Cells.Count; index++)
+            {
+                bool isBoundary = index == Cells.Count || Cells[index].Kind != currentKind;
+                if (!isBoundary)
+                    continue;
+
+                AddSegment(segmentStart, index - 1, currentKind);
+
+                if (index < Cells.Count)
+                {
+                    segmentStart = index;
+                    currentKind = Cells[index].Kind;
+                }
+            }
+        }
+
+        private void AddSegment(int startIndex, int endIndex, CycleStateKind kind)
+        {
+            var firstCell = Cells[startIndex];
+            var lastCell = Cells[endIndex];
+            int length = endIndex - startIndex + 1;
+
+            var annotations = Cells
+                .Skip(startIndex)
+                .Take(length)
+                .Select(c => c.Annotation)
+                .Where(a => !string.IsNullOrWhiteSpace(a))
+                .ToList();
+
+            string label = CycleDisplayFormatting.GetLabel(kind);
+            string toolTip = CycleDisplayFormatting.GetSegmentToolTip(
+                firstCell.CycleNumber,
+                lastCell.CycleNumber,
+                label,
+                annotations);
+
+            Segments.Add(new CycleGroupSegment(
+                startIndex,
+                length,
+                firstCell.CycleNumber,
+                lastCell.CycleNumber,
+                kind,
+                firstCell.Background,
+                firstCell.Foreground,
+                label,
+                toolTip));
         }
 
         private void GroupOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -322,6 +396,7 @@ namespace Osadka.ViewModels
                 foreach (var cell in Cells)
                     cell.RefreshAppearance();
                 OnPropertyChanged(nameof(Accent));
+                BuildSegments();
             }
         }
 
@@ -330,11 +405,52 @@ namespace Osadka.ViewModels
             OnPropertyChanged(nameof(PointCount));
         }
 
+        private void StatesOnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            BuildCells();
+        }
+
         public void Dispose()
         {
             Group.PropertyChanged -= GroupOnPropertyChanged;
             Group.PointIds.CollectionChanged -= PointIdsOnCollectionChanged;
+            Group.States.CollectionChanged -= StatesOnCollectionChanged;
         }
+    }
+
+    public sealed class CycleGroupSegment
+    {
+        public CycleGroupSegment(
+            int startIndex,
+            int length,
+            int startCycle,
+            int endCycle,
+            CycleStateKind kind,
+            Brush background,
+            Brush foreground,
+            string label,
+            string toolTip)
+        {
+            StartIndex = startIndex;
+            Length = length;
+            StartCycle = startCycle;
+            EndCycle = endCycle;
+            Kind = kind;
+            Background = background;
+            Foreground = foreground;
+            Label = label;
+            ToolTip = toolTip;
+        }
+
+        public int StartIndex { get; }
+        public int Length { get; }
+        public int StartCycle { get; }
+        public int EndCycle { get; }
+        public CycleStateKind Kind { get; }
+        public Brush Background { get; }
+        public Brush Foreground { get; }
+        public string Label { get; }
+        public string ToolTip { get; }
     }
 
     public partial class CycleDisplayCell : ObservableObject
@@ -404,6 +520,32 @@ namespace Osadka.ViewModels
                 return $"Цикл {cycleNumber}: {label}";
 
             return $"Цикл {cycleNumber}: {label}\n{annotation}";
+        }
+
+        public static string GetSegmentToolTip(int startCycle, int endCycle, string label, IEnumerable<string?> annotations)
+        {
+            var builder = new StringBuilder();
+            if (startCycle == endCycle)
+            {
+                builder.Append($"Цикл {startCycle}: {label}");
+            }
+            else
+            {
+                builder.Append($"Циклы {startCycle}–{endCycle}: {label}");
+            }
+
+            var notes = annotations
+                .Where(a => !string.IsNullOrWhiteSpace(a))
+                .Select(a => a!.Trim())
+                .ToList();
+
+            if (notes.Count > 0)
+            {
+                builder.AppendLine();
+                builder.Append(string.Join(Environment.NewLine, notes));
+            }
+
+            return builder.ToString();
         }
 
         public static Color GetFill(Color baseColor, CycleStateKind kind)
