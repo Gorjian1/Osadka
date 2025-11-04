@@ -110,7 +110,6 @@
                     <Grid Grid.Column="1" Margin="12,0,0,0">
                         <Grid>
                             <ItemsControl ItemsSource="{Binding DataContext.Columns, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                          AlternationCount="{Binding DataContext.CycleCount, RelativeSource={RelativeSource AncestorType=UserControl}, FallbackValue=1}"
                                           IsHitTestVisible="False">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -120,7 +119,7 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemContainerStyle>
                                     <Style TargetType="ContentPresenter">
-                                        <Setter Property="Grid.Column" Value="{Binding RelativeSource={RelativeSource Self}, Path=(ItemsControl.AlternationIndex)}"/>
+                                        <Setter Property="Grid.Column" Value="{Binding Index}"/>
                                     </Style>
                                 </ItemsControl.ItemContainerStyle>
                                 <ItemsControl.ItemTemplate>
@@ -297,11 +296,10 @@
                                           Grid.Column="1"
                                           ItemsSource="{Binding Columns}"
                                           ItemTemplate="{StaticResource CycleHeaderTemplate}"
-                                          ItemsPanel="{StaticResource CycleHeaderPanel}"
-                                          AlternationCount="{Binding CycleCount, FallbackValue=1}">
+                                          ItemsPanel="{StaticResource CycleHeaderPanel}">
                                 <ItemsControl.ItemContainerStyle>
                                     <Style TargetType="ContentPresenter">
-                                        <Setter Property="Grid.Column" Value="{Binding RelativeSource={RelativeSource Self}, Path=(ItemsControl.AlternationIndex)}"/>
+                                        <Setter Property="Grid.Column" Value="{Binding Index}"/>
                                     </Style>
                                 </ItemsControl.ItemContainerStyle>
                             </ItemsControl>
@@ -352,7 +350,7 @@
                                 <Style TargetType="StackPanel">
                                     <Setter Property="Visibility" Value="Collapsed"/>
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasSelectedGroup, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
+                                        <DataTrigger Binding="{Binding DataContext.HasSelectedGroup, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
                                             <Setter Property="Visibility" Value="Visible"/>
                                         </DataTrigger>
                                     </Style.Triggers>

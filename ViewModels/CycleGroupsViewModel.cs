@@ -124,12 +124,13 @@ namespace Osadka.ViewModels
         private void UpdateColumns(IReadOnlyList<int> cycles)
         {
             Columns.Clear();
-            foreach (var cycle in cycles)
+            for (int index = 0; index < cycles.Count; index++)
             {
+                int cycle = cycles[index];
                 string label = _raw.CycleHeaders.TryGetValue(cycle, out var text) && !string.IsNullOrWhiteSpace(text)
                     ? text
                     : $"Цикл {cycle}";
-                Columns.Add(new CycleColumnHeader(cycle, label));
+                Columns.Add(new CycleColumnHeader(index, cycle, label));
             }
 
             OnPropertyChanged(nameof(CycleCount));
@@ -233,12 +234,14 @@ namespace Osadka.ViewModels
 
     public sealed class CycleColumnHeader
     {
-        public CycleColumnHeader(int number, string label)
+        public CycleColumnHeader(int index, int number, string label)
         {
+            Index = index;
             Number = number;
             Label = label;
         }
 
+        public int Index { get; }
         public int Number { get; }
         public string Label { get; }
     }
