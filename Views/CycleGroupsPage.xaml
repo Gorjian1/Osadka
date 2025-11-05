@@ -5,6 +5,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:Osadka.ViewModels"
              xmlns:ui="clr-namespace:Osadka.UI"
+             x:Name="CycleGroupsPageControl"
              mc:Ignorable="d"
              d:DesignWidth="1280"
              d:DesignHeight="720">
@@ -42,7 +43,7 @@
             <Border Background="{Binding Background}"
                     CornerRadius="8"
                     Margin="2,10"
-                    MinHeight="20"
+                    MinHeight="14"
                     ToolTip="{Binding ToolTip}">
                 <TextBlock Text="{Binding Label}"
                            Foreground="{Binding Foreground}"
@@ -239,7 +240,20 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" MinWidth="360"/>
                 <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*" MinWidth="320"/>
+                <ColumnDefinition>
+                    <ColumnDefinition.Style>
+                        <Style TargetType="ColumnDefinition">
+                            <Setter Property="Width" Value="0"/>
+                            <Setter Property="MinWidth" Value="0"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.HasSelectedGroup, ElementName=CycleGroupsPageControl}" Value="True">
+                                    <Setter Property="Width" Value="Auto"/>
+                                    <Setter Property="MinWidth" Value="320"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ColumnDefinition.Style>
+                </ColumnDefinition>
             </Grid.ColumnDefinitions>
 
             <!-- Левая часть -->
@@ -315,7 +329,18 @@
             </Grid>
         </Border>
 
-            <GridSplitter Grid.Column="1" HorizontalAlignment="Center"/>
+            <GridSplitter Grid.Column="1" HorizontalAlignment="Center">
+                <GridSplitter.Style>
+                    <Style TargetType="GridSplitter" BasedOn="{StaticResource {x:Type GridSplitter}}">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding DataContext.HasSelectedGroup, ElementName=CycleGroupsPageControl}" Value="True">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </GridSplitter.Style>
+            </GridSplitter>
 
             <!-- Правая часть -->
             <Border Grid.Column="2"
@@ -324,39 +349,20 @@
                     CornerRadius="0,12,12,0"
                     BorderBrush="{StaticResource PanelBorderBrush}"
                     BorderThickness="0,1,1,1">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasSelectedGroup}" Value="True">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <Grid>
-                        <StackPanel HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    Margin="0,80,0,0">
-                            <StackPanel.Style>
-                                <Style TargetType="StackPanel">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasSelectedGroup}" Value="False">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </StackPanel.Style>
-                            <TextBlock Text="Выберите группу слева"
-                                       FontSize="16"
-                                       Foreground="{StaticResource SecondaryTextBrush}"/>
-                        </StackPanel>
-
                         <StackPanel Margin="0"
                                     DataContext="{Binding SelectedGroup}">
-                            <StackPanel.Style>
-                                <Style TargetType="StackPanel">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding DataContext.HasSelectedGroup, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </StackPanel.Style>
-
                             <TextBlock Text="{Binding Name}"
                                        FontSize="20"
                                        FontWeight="SemiBold"
