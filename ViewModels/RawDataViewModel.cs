@@ -461,12 +461,14 @@ namespace Osadka.ViewModels
                 _disabledPoints.Clear();
 
                 ObjectNumbers.Clear();
-                ObjectNumbers.AddRange(result.ObjectNumbers);
+                foreach (var num in result.ObjectNumbers)
+                    ObjectNumbers.Add(num);
 
                 Header.ObjectNumber = result.SelectedObjectNumber;
 
                 CycleNumbers.Clear();
-                CycleNumbers.AddRange(result.CycleNumbers);
+                foreach (var num in result.CycleNumbers)
+                    CycleNumbers.Add(num);
 
                 Header.CycleNumber = result.SelectedCycleNumber;
 

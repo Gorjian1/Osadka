@@ -621,7 +621,9 @@ namespace Osadka.ViewModels
                         Ratio = row.Ratio
                     }).ToList(),
                     ActiveCycles = RawVM?.GetActiveCyclesSnapshot() ?? new Dictionary<int, List<MeasurementRow>>(),
-                    CycleHeaders = RawVM?.CycleHeaders ?? new Dictionary<int, string>(),
+                    CycleHeaders = RawVM?.CycleHeaders != null
+                        ? new Dictionary<int, string>(RawVM.CycleHeaders)
+                        : new Dictionary<int, string>(),
                     DynamicsData = _dynSvc.Build(RawVM?.GetActiveCyclesSnapshot() ?? new Dictionary<int, List<MeasurementRow>>())
                         .Select(s => new DynamicsSeries
                         {
