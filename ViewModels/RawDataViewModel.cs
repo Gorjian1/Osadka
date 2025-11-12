@@ -7,6 +7,7 @@ using Microsoft.Win32;
 using Osadka.Messages;
 using Osadka.Models;
 using Osadka.Models.Cycles;
+using Osadka.Services.Data;
 using Osadka.Services.Settings;
 using Osadka.Core.Units; // Unit, UnitConverter
 using System;
@@ -72,15 +73,14 @@ namespace Osadka.ViewModels
         [ObservableProperty] private Unit sourceUnit = Unit.Millimeter;
 
         // Для совместимости с существующей разметкой, если она привязана к CoordUnit
-        public enum CoordUnits { Millimeters, Centimeters, Decimeters, Meters }
-        public IReadOnlyList<CoordUnits> CoordUnitValues { get; } =
-            Enum.GetValues(typeof(CoordUnits)).Cast<CoordUnits>().ToList();
+        public IReadOnlyList<Services.Data.CoordUnits> CoordUnitValues { get; } =
+            Enum.GetValues(typeof(Services.Data.CoordUnits)).Cast<Services.Data.CoordUnits>().ToList();
 
         [ObservableProperty]
-        private CoordUnits coordUnit = CoordUnits.Millimeters;
+        private Services.Data.CoordUnits coordUnit = Services.Data.CoordUnits.Millimeters;
 
         // Преобразование старых значений в новые через отношение масштабов
-        partial void OnCoordUnitChanged(CoordUnits oldVal, CoordUnits newVal)
+        partial void OnCoordUnitChanged(Services.Data.CoordUnits oldVal, Services.Data.CoordUnits newVal)
         {
             var oldU = Map(oldVal);
             var newU = Map(newVal);
@@ -103,12 +103,13 @@ namespace Osadka.ViewModels
 
         // Удобные аксессоры
         public double CoordScale => UnitConverter.ToMm(1.0, Map(coordUnit)); // 1 <ед.> → мм
-        private static Unit Map(CoordUnits u) => u switch
+        private static Unit Map(Services.Data.CoordUnits u) => u switch
         {
-            CoordUnits.Millimeters => Unit.Millimeter,
-            CoordUnits.Centimeters => Unit.Centimeter,
-            CoordUnits.Decimeters => Unit.Decimeter,
-            _ => Unit.Meter
+            Services.Data.CoordUnits.Millimeters => Unit.Millimeter,
+            Services.Data.CoordUnits.Centimeters => Unit.Centimeter,
+            Services.Data.CoordUnits.Decimeters => Unit.Decimeter,
+            Services.Data.CoordUnits.Meters => Unit.Meter,
+            _ => Unit.Millimeter
         };
 
         // === Кеш по объектам/циклам ===
@@ -429,7 +430,7 @@ namespace Osadka.ViewModels
 
             try
             {
-                using var stream = OpenWorkbookStream(filePath);
+                using var stream = ExcelImportService.OpenWorkbookStream(filePath);
                 using var wb = new XLWorkbook(stream);
 
                 var dlg = new Osadka.Views.ImportSelectionWindow(wb)
@@ -440,62 +441,34 @@ namespace Osadka.ViewModels
 
                 IXLWorksheet ws = dlg.SelectedWorksheet?.Sheet ?? throw new InvalidOperationException("Не выбран лист Excel.");
 
-                var objHeaders = dlg.ObjectHeaders;
-                var cycleStarts = dlg.CycleStarts;
-                int objIdx = dlg.SelectedObjectIndex;   // 1-based
-                int cycleIdx = dlg.SelectedCycleIndex;  // 1-based
+                var importer = new ExcelImportService(coordUnit);
+                var result = importer.ImportFromWorkbook(
+                    ws,
+                    dlg.ObjectHeaders,
+                    dlg.CycleStarts,
+                    dlg.SelectedObjectIndex,
+                    dlg.SelectedCycleIndex);
 
-                if (objHeaders == null || objHeaders.Count == 0) objHeaders = FindObjectHeaders(ws);
-                if (objHeaders == null || objHeaders.Count == 0)
-                    throw new InvalidOperationException("Не удалось найти заголовок с «№ точки» на листе.");
-
-                var hdrTuple = objIdx >= 1 && objIdx <= objHeaders.Count ? objHeaders[objIdx - 1] : objHeaders.First();
-                int idCol = hdrTuple.Cell.Address.ColumnNumber;
-                int subHdrRow = FindSubHeaderRow(ws, hdrTuple.Row, idCol);
-
-                if (cycleStarts == null || cycleStarts.Count == 0)
-                {
-                    var computed = FindCycleStarts(ws, subHdrRow, idCol);
-                    if (computed.Count == 0)
-                    {
-                        int lastRow = ws.LastRowUsed().RowNumber();
-                        for (int r = hdrTuple.Row; r <= Math.Min(hdrTuple.Row + 10, lastRow); r++)
-                        {
-                            bool anyOtm = ws.Row(r).Cells().Any(c => Regex.IsMatch(c.GetString(), @"^\s*Отметка", RegexOptions.IgnoreCase));
-                            if (anyOtm)
-                            {
-                                subHdrRow = r;
-                                computed = FindCycleStarts(ws, subHdrRow, idCol);
-                                if (computed.Count > 0) break;
-                            }
-                        }
-                    }
-                    cycleStarts = computed;
-                }
-
+                // Применяем результаты импорта
                 _cycleHeaders.Clear();
-                ReadAllObjects(ws, objHeaders, cycleStarts);
+                foreach (var kvp in result.CycleHeaders)
+                    _cycleHeaders[kvp.Key] = kvp.Value;
+
+                _objects.Clear();
+                foreach (var kvp in result.Objects)
+                    _objects[kvp.Key] = kvp.Value;
+
                 _disabledPoints.Clear();
 
                 ObjectNumbers.Clear();
-                foreach (var k in _objects.Keys.OrderBy(k => k)) ObjectNumbers.Add(k);
+                ObjectNumbers.AddRange(result.ObjectNumbers);
 
-                Header.ObjectNumber = (objIdx >= 1 && objIdx <= ObjectNumbers.Count)
-                    ? ObjectNumbers[objIdx - 1]
-                    : (ObjectNumbers.Count > 0 ? ObjectNumbers[0] : 1);
+                Header.ObjectNumber = result.SelectedObjectNumber;
 
                 CycleNumbers.Clear();
-                if (_objects.TryGetValue(Header.ObjectNumber, out var cyclesForObject))
-                {
-                    foreach (var k in cyclesForObject.Keys.OrderBy(k => k)) CycleNumbers.Add(k);
-                }
+                CycleNumbers.AddRange(result.CycleNumbers);
 
-                if (CycleNumbers.Count > 0)
-                {
-                    int idx = Math.Clamp(cycleIdx, 1, CycleNumbers.Count);
-                    int chosenNumber = CycleNumbers[idx - 1];
-                    Header.CycleNumber = chosenNumber;
-                }
+                Header.CycleNumber = result.SelectedCycleNumber;
 
                 RefreshData();
                 ActiveFilterChanged?.Invoke(this, EventArgs.Empty);
@@ -504,200 +477,6 @@ namespace Osadka.ViewModels
             {
                 MessageBox.Show($"Ошибка при импорте Excel:\n{ex.Message}", "Импорт", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-
-            // === Локальные функции ===
-            List<(int Row, IXLCell Cell)> FindObjectHeaders(IXLWorksheet sheet)
-                => sheet.RangeUsed()?
-                       .Rows()
-                       .Select(r =>
-                       {
-                           var hits = r.Cells().Where(c => Regex.IsMatch(c.GetString(), @"^\s*№\s*(точки|мар\w*)", RegexOptions.IgnoreCase));
-                           if (!hits.Any()) return (Row: 0, Cell: (IXLCell?)null);
-                           var leftMost = hits.OrderBy(c => c.Address.ColumnNumber).First();
-                           return (Row: r.RowNumber(), Cell: leftMost);
-                       })
-                       .Where(t => t.Cell != null && t.Row > 0)
-                       .ToList()
-                   ?? new List<(int Row, IXLCell Cell)>();
-
-            List<int> FindCycleStarts(IXLWorksheet sheet, int subHdrRow, int idColumn)
-                => sheet.Row(subHdrRow)
-                        .Cells()
-                        .Where(c => c.Address.ColumnNumber != idColumn && c.GetString().Trim().StartsWith("Отметка", StringComparison.OrdinalIgnoreCase))
-                        .Select(c => c.Address.ColumnNumber)
-                        .Distinct()
-                        .OrderBy(c => c)
-                        .ToList();
-
-            int FindSubHeaderRow(IXLWorksheet s, int headerRow, int idColumn)
-            {
-                int lastRow = s.LastRowUsed().RowNumber();
-                for (int r = headerRow + 1; r <= Math.Min(headerRow + 6, lastRow); r++)
-                {
-                    bool ok = s.Row(r).Cells().Any(c => c.Address.ColumnNumber != idColumn && c.GetString().Trim().StartsWith("Отметка", StringComparison.OrdinalIgnoreCase));
-                    if (ok) return r;
-                }
-                return headerRow + 1;
-            }
-
-            void ReadAllObjects(IXLWorksheet sheet, List<(int Row, IXLCell Cell)> headers, List<int> cycleCols)
-            {
-                _objects.Clear();
-                if (headers == null || headers.Count == 0) return;
-
-                headers = headers.OrderBy(h => h.Row).ToList();
-
-                for (int objNumber = 1; objNumber <= headers.Count; objNumber++)
-                {
-                    var hdr = headers[objNumber - 1];
-
-                    int idColLocal = hdr.Cell.Address.ColumnNumber;
-                    int subHdrRowLocal = FindSubHeaderRow(sheet, hdr.Row, idColLocal);
-
-                    int dataRowFirst = subHdrRowLocal + 1;
-                    int dataRowLast = (objNumber == headers.Count ? sheet.LastRowUsed().RowNumber() : headers[objNumber].Row - 1);
-
-                    var localCycCols = (cycleCols != null && cycleCols.Count > 0) ? cycleCols : FindCycleStarts(sheet, subHdrRowLocal, idColLocal);
-
-                    var cyclesDict = new Dictionary<int, List<MeasurementRow>>();
-
-                    foreach (var (cycIdx, startCol) in localCycCols.Select((c, i) => (i + 1, c)))
-                    {
-                        string cycLabel = BuildCycleHeaderLabel(sheet, startCol, subHdrRowLocal, hdr.Row);
-                        if (!string.IsNullOrWhiteSpace(cycLabel)) _cycleHeaders[cycIdx] = cycLabel;
-
-                        var rows = new List<MeasurementRow>();
-                        int blanksInARow = 0;
-
-                        for (int r = dataRowFirst; r <= dataRowLast; r++)
-                        {
-                            string idText = sheet.Cell(r, idColLocal).GetString().Trim();
-                            if (Regex.IsMatch(idText, @"^\s*№\s*(точки|мар\w*)", RegexOptions.IgnoreCase)) break;
-
-                            if (string.IsNullOrEmpty(idText))
-                            {
-                                blanksInARow++;
-                                if (blanksInARow >= 3) break;
-                                continue;
-                            }
-                            blanksInARow = 0;
-
-                            var (mark, markRaw) = ParseCell(sheet.Cell(r, startCol));
-                            var (settl, settlRaw) = ParseCell(sheet.Cell(r, startCol + 1));
-                            var (total, totalRaw) = ParseCell(sheet.Cell(r, startCol + 2));
-                            if (mark.HasValue) mark = UnitConverter.ToMm(mark.Value, Map(coordUnit));
-                            if (settl.HasValue) settl = UnitConverter.ToMm(settl.Value, Map(coordUnit));
-                            if (total.HasValue) total = UnitConverter.ToMm(total.Value, Map(coordUnit));
-                            if (mark is null && settl is null && total is null &&
-                                string.IsNullOrWhiteSpace(markRaw) && string.IsNullOrWhiteSpace(settlRaw) && string.IsNullOrWhiteSpace(totalRaw))
-                            {
-                                continue;
-                            }
-                            if (settl.HasValue) settl = Math.Round(settl.Value, 1);
-                            if (total.HasValue) total = Math.Round(total.Value, 1);
-
-                            rows.Add(new MeasurementRow
-                            {
-                                Id = idText,
-                                Mark = mark,
-                                Settl = settl,
-                                Total = total,
-                                MarkRaw = markRaw,
-                                SettlRaw = settlRaw,
-                                TotalRaw = totalRaw
-                            });
-                        }
-
-                        cyclesDict[cycIdx] = rows;
-                    }
-
-                    _objects[objNumber] = cyclesDict;
-                }
-            }
-
-            string BuildCycleHeaderLabel(IXLWorksheet sheet, int startCol, int subHdrRow, int headerRow)
-            {
-                string Read(IXLCell cell)
-                {
-                    var s = cell.GetString();
-                    if (!string.IsNullOrWhiteSpace(s)) return s;
-                    var mr = cell.MergedRange();
-                    return mr != null ? mr.FirstCell().GetString() : s;
-                }
-
-                int r1 = Math.Max(1, headerRow - 2);
-                int r2 = subHdrRow + 1;
-
-                // 1) Ищем только внутри текущей тройки (Отметка/Осадка/Общая)
-                for (int r = r1; r <= r2; r++)
-                {
-                    for (int c = startCol; c <= startCol + 2; c++)
-                    {
-                        var s = Read(sheet.Cell(r, c));
-                        if (!string.IsNullOrWhiteSpace(s) && Regex.IsMatch(s, @"^\s*Цикл\b", RegexOptions.IgnoreCase))
-                            return s.Trim();
-                    }
-                }
-
-                // 2) Фолбэк — центр-сначала (0,+1,-1,+2,-2,...)
-                int[] offs = new[] { 0, +1, -1, +2, -2, +3, -3 };
-                for (int r = r1; r <= r2; r++)
-                {
-                    foreach (var dc in offs)
-                    {
-                        int c = startCol + dc;
-                        if (c <= 0) continue;
-                        var s = Read(sheet.Cell(r, c));
-                        if (!string.IsNullOrWhiteSpace(s) && Regex.IsMatch(s, @"^\s*Цикл\b", RegexOptions.IgnoreCase))
-                            return s.Trim();
-                    }
-                }
-
-                return string.Empty;
-            }
-        }
-
-        private static FileStream OpenWorkbookStream(string filePath)
-        {
-            var shareModes = new[]
-            {
-                FileShare.ReadWrite | FileShare.Delete,
-                FileShare.ReadWrite,
-                FileShare.Read
-            };
-
-            IOException? lastError = null;
-            foreach (var share in shareModes)
-            {
-                for (int attempt = 0; attempt < 3; attempt++)
-                {
-                    try
-                    {
-                        return new FileStream(filePath, FileMode.Open, FileAccess.Read, share);
-                    }
-                    catch (IOException ex)
-                    {
-                        lastError = ex;
-                        if (attempt < 2)
-                            Thread.Sleep(100);
-                    }
-                }
-            }
-
-            throw lastError ?? new IOException($"Не удалось открыть файл '{filePath}'.");
-        }
-
-        private static (double? val, string raw) ParseCell(IXLCell cell)
-        {
-            string txt = cell.GetString().Trim();
-            if (Regex.IsMatch(txt, @"\bнов", RegexOptions.IgnoreCase)) return (0, txt);
-
-            if (cell.DataType == XLDataType.Number) return (cell.GetDouble(), txt);
-
-            if (double.TryParse(txt.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out double v))
-                return (v, txt);
-
-            return (null, txt);
         }
 
         public void RebuildCycleGroups()
