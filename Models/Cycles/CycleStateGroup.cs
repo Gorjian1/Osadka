@@ -11,8 +11,11 @@ public partial class CycleStateGroup : ObservableObject
 {
     public CycleStateGroup(string key, IEnumerable<CycleState> states)
     {
+        if (string.IsNullOrEmpty(key))
+            throw new ArgumentException("Key cannot be null or empty", nameof(key));
+
         Key = key;
-        States = new ObservableCollection<CycleState>(states);
+        States = new ObservableCollection<CycleState>(states ?? Enumerable.Empty<CycleState>());
     }
 
     public string Key { get; }

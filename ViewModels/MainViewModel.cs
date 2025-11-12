@@ -265,8 +265,19 @@ namespace Osadka.ViewModels
                 vm.Header.CycleNumber = cycleNumber;
 
                 vm.SelectedCycleHeader = data.SelectedCycleHeader ?? string.Empty;
-                vm.RebuildCycleGroups();
-                vm.SetDisabledPoints(data.DisabledPointIds?.ToArray() ?? Array.Empty<string>());
+
+                try
+                {
+                    vm.RebuildCycleGroups();
+                    vm.SetDisabledPoints(data.DisabledPointIds?.ToArray() ?? Array.Empty<string>());
+                }
+                catch (Exception rebuildEx)
+                {
+                    // Если RebuildCycleGroups не удался, логируем ошибку но продолжаем загрузку
+                    System.Diagnostics.Debug.WriteLine($"Warning: RebuildCycleGroups failed: {rebuildEx.Message}");
+                    // Очищаем группы циклов, чтобы избежать некорректного состояния
+                    vm.CycleGroups.Clear();
+                }
 
                 vm.DrawingPath = dwgPath;
 
@@ -275,6 +286,22 @@ namespace Osadka.ViewModels
             }
             catch (Exception ex)
             {
+                // При критической ошибке очищаем состояние, чтобы не оставить приложение в поврежденном виде
+                vm.SuspendRefresh(true);
+                try
+                {
+                    vm.Objects.Clear();
+                    vm.ObjectNumbers.Clear();
+                    vm.CycleNumbers.Clear();
+                    vm.CycleGroups.Clear();
+                    vm.DataRows.Clear();
+                    vm.CoordRows.Clear();
+                }
+                finally
+                {
+                    vm.SuspendRefresh(false);
+                }
+
                 System.Windows.MessageBox.Show(
                     $"Ошибка при загрузке проекта:\n{ex.Message}",
                     "Ошибка",

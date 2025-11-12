@@ -738,7 +738,15 @@ namespace Osadka.ViewModels
                     .Select(cycle => CreateCycleState(cycle, perCycle.TryGetValue(cycle, out var row) ? row : null))
                     .ToList();
 
+                // Пропускаем точки без состояний (защита от поврежденных данных)
+                if (states.Count == 0)
+                    continue;
+
                 string key = BuildStateKey(states);
+
+                // Дополнительная защита от пустых ключей
+                if (string.IsNullOrEmpty(key))
+                    continue;
 
                 if (!grouped.TryGetValue(key, out var group))
                 {

@@ -162,17 +162,18 @@ namespace Osadka.Views
                 .Select(s => s.StartColumn)
                 .ToList();
 
-            // Внутренняя нумерация — слева-направо (ASC)
+            // Внутренняя нумерация — слева-направо (ASC) для подписей
             var ordinalByCol = starts
                 .Select((s, idx) => (s.StartColumn, Ordinal: idx + 1))
                 .ToDictionary(x => x.StartColumn, x => x.Ordinal);
 
             // Отображение пользователю — справа-налево (часто самый правый — последний цикл)
+            // Index должен соответствовать позиции в DESC-списке, чтобы совпадать с ReadAllObjects
             Cycles = starts
                 .OrderByDescending(c => c.StartColumn)
-                .Select(s => new CycleItem
+                .Select((s, idx) => new CycleItem
                 {
-                    Index = ordinalByCol[s.StartColumn], // ВАЖНО: внутренний индекс!
+                    Index = idx + 1, // Позиция в DESC-списке (соответствует cycIdx в ReadAllObjects)
                     StartColumn = s.StartColumn,
                     Label = string.IsNullOrWhiteSpace(s.Label) ? $"Цикл {ordinalByCol[s.StartColumn]}" : s.Label
                 })
