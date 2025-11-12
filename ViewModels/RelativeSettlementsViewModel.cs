@@ -6,7 +6,7 @@ using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Osadka.Models;
-using Osadka.Services;
+using Osadka.Services.Reports;
 
 namespace Osadka.ViewModels
 {

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Osadka.Models;
 
-namespace Osadka.Services
+namespace Osadka.Services.Reports
 {
     public record RelativeRow(
         string Id1,

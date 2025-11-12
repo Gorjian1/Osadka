@@ -16,7 +16,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
 using Osadka.Models;
-using Osadka.Services;
+using Osadka.Models.Cycles;
+using Osadka.Services.Reports;
+using Osadka.Services.Data;
 using Osadka.Views;
 using Telegram.Bot.Types;
 

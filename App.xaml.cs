@@ -1,5 +1,5 @@
 ﻿using Microsoft.Win32;
-using Osadka.Services;
+using Osadka.Services.Integration;
 using Osadka.ViewModels;
 using System.Configuration;
 using System.Data;

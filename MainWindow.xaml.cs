@@ -1,5 +1,5 @@
 ﻿using AutoUpdaterDotNET;
-using Osadka.Services;
+using Osadka.Services.Integration;
 using Osadka.ViewModels;
 using System;
 using System.ComponentModel;
