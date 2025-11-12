@@ -1113,7 +1113,7 @@ namespace Osadka.ViewModels
             foreach (var (cycle, rows) in cycles)
             {
                 var filtered = rows
-                    .Where(r => !_disabledPoints.Contains(r.Id))
+                    .Where(r => !_disabledPoints.Contains(r.Id) && r.IsAvailableForCalculations())
                     .ToList();
                 result[cycle] = filtered;
             }

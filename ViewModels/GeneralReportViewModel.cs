@@ -106,7 +106,10 @@ namespace Osadka.ViewModels
         }
         private void Recalc()
         {
-            var activeRows = _raw.ActiveDataRows.ToList();
+            // Фильтруем точки недоступные в текущем цикле (Нет доступа, Уничтожена)
+            var activeRows = _raw.ActiveDataRows
+                .Where(r => r.IsAvailableForCalculations())
+                .ToList();
             Report = _svc.Build(
                 activeRows,
                 _raw.Header.MaxNomen ?? 0,
@@ -142,6 +145,8 @@ namespace Osadka.ViewModels
 
             double spLim = _raw.Header.RelNomen ?? 0;
             double calcLim = _raw.Header.RelCalculated ?? 0;
+
+            // Для относительных осадок используем те же отфильтрованные данные
             var coordLookup = _raw.ActiveCoordRows.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
             var coordsAligned = activeRows
                 .Select(r => coordLookup.TryGetValue(r.Id, out var coord)
