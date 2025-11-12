@@ -1,4 +1,5 @@
-﻿using Osadka.ViewModels;
+﻿using Osadka.Models.Cycles;
+using Osadka.ViewModels;
 using System;
 using System.ComponentModel;
 using System.Linq;
@@ -43,7 +44,7 @@ namespace Osadka.Views
             if (viewCycles != null)
             {
                 viewCycles.SortDescriptions.Clear();
-                viewCycles.SortDescriptions.Add(new SortDescription(nameof(RawDataViewModel.CycleDisplayItem.Number),
+                viewCycles.SortDescriptions.Add(new SortDescription(nameof(CycleDisplayItem.Number),
                                                                    ListSortDirection.Descending));
             }
 

@@ -1,6 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Osadka.Services;
+using Osadka.Services.Reports;
 using OxyPlot;
 using OxyPlot.Axes;
 using OxyPlot.Legends;

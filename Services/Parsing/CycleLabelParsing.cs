@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
-namespace Osadka.Services
+namespace Osadka.Services.Parsing
 {
     public static class CycleLabelParsing
     {

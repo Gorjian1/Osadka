@@ -4,7 +4,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
-namespace Osadka.Services
+namespace Osadka.Services.Integration
 {
     public static class UpdateService
     {

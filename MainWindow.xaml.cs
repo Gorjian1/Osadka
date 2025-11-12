@@ -1,5 +1,5 @@
 ﻿using AutoUpdaterDotNET;
-using Osadka.Services;
+using Osadka.Services.Integration;
 using Osadka.ViewModels;
 using System;
 using System.ComponentModel;
@@ -25,7 +25,12 @@ namespace Osadka
         }
         private void MainWindow_Closing(object? sender, CancelEventArgs e)
         {
-
+            // Проверяем наличие несохраненных изменений
+            if (!_vm.OnWindowClosing())
+            {
+                // Пользователь отменил закрытие
+                e.Cancel = true;
+            }
         }
         private async void OnCheckUpdateClick(object sender, RoutedEventArgs e)
         {
