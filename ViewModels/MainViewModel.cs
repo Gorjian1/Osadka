@@ -47,6 +47,7 @@ namespace Osadka.ViewModels
         private readonly HashSet<MeasurementRow> _trackedMeasurementRows = new();
         private readonly HashSet<CoordRow> _trackedCoordRows = new();
         private bool _isDirty;
+        private bool _suppressDirtyTracking; // Флаг для подавления отслеживания во время загрузки
 
         private object? _currentPage;
         private bool _includeGeneral = true;
@@ -102,6 +103,9 @@ namespace Osadka.ViewModels
 
         public MainViewModel()
         {
+            // Подавляем отслеживание изменений во время инициализации
+            _suppressDirtyTracking = true;
+
             RawVM = new RawDataViewModel();
             RawVM.PropertyChanged += (_, e) =>
             {
@@ -157,6 +161,9 @@ namespace Osadka.ViewModels
             };
 
             Navigate(PageKeys.Raw);
+
+            // Снимаем подавление - теперь отслеживаем изменения
+            _suppressDirtyTracking = false;
         }
 
         #region Navigation
@@ -179,15 +186,24 @@ namespace Osadka.ViewModels
 
         private void NewProject()
         {
-            RawVM.ClearCommand.Execute(null);
-            _currentPath = null;
-            ResetDirty();
+            _suppressDirtyTracking = true;
+            try
+            {
+                RawVM.ClearCommand.Execute(null);
+                _currentPath = null;
+                ResetDirty();
+            }
+            finally
+            {
+                _suppressDirtyTracking = false;
+            }
         }
 
         public void LoadProject(string path)
         {
             if (RawVM is not { } vm) return;
 
+            _suppressDirtyTracking = true;
             try
             {
                 var json = System.IO.File.ReadAllText(path);
@@ -263,6 +279,10 @@ namespace Osadka.ViewModels
                     System.Windows.MessageBoxImage.Error
                 );
             }
+            finally
+            {
+                _suppressDirtyTracking = false;
+            }
         }
 
 
@@ -333,7 +353,57 @@ namespace Osadka.ViewModels
             ResetDirty();
         }
 
+        /// <summary>
+        /// Обработка закрытия окна. Проверяет наличие несохраненных изменений.
+        /// </summary>
+        /// <returns>true если можно закрывать окно, false если отменить закрытие</returns>
+        public bool OnWindowClosing()
+        {
+            if (!_isDirty)
+                return true; // Нет изменений - можно закрывать
 
+            var result = MessageBox.Show(
+                "Имеются несохраненные изменения. Сохранить проект перед выходом?",
+                "Несохраненные изменения",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Question);
+
+            switch (result)
+            {
+                case MessageBoxResult.Yes:
+                    // Сохранить и закрыть
+                    if (_currentPath != null)
+                    {
+                        SaveTo(_currentPath);
+                        return true;
+                    }
+                    else
+                    {
+                        // Нет пути - показываем диалог SaveAs
+                        var dlg = new SaveFileDialog
+                        {
+                            Filter = "Osadka Project (*.osd)|*.osd"
+                        };
+                        if (dlg.ShowDialog() == true)
+                        {
+                            SaveTo(dlg.FileName);
+                            _currentPath = dlg.FileName;
+                            return true;
+                        }
+                        // Пользователь отменил сохранение - не закрываем
+                        return false;
+                    }
+
+                case MessageBoxResult.No:
+                    // Закрыть без сохранения
+                    return true;
+
+                case MessageBoxResult.Cancel:
+                default:
+                    // Отменить закрытие
+                    return false;
+            }
+        }
 
         private void SubscribeMeasurementRow(MeasurementRow? row)
         {
@@ -440,6 +510,10 @@ namespace Osadka.ViewModels
 
         private void MarkDirty()
         {
+            // Игнорируем во время загрузки/инициализации
+            if (_suppressDirtyTracking)
+                return;
+
             if (_isDirty)
                 return;
 
