@@ -607,66 +607,48 @@ namespace Osadka.ViewModels
             {
                 File.Copy(template, dlg.FileName, overwrite: true);
 
-                using (var wb = new XLWorkbook(dlg.FileName))
+                // Подготовка данных для экспорта
+                var exportData = new ExcelExportData
                 {
-                    var generalWs = wb.Worksheets.First(); // титульный/общий
-
-                    if (IncludeGeneral)
+                    PlaceholderMap = BuildPlaceholderMap(),
+                    DisabledTags = GenVM.Settings?.GetDisabledTags() ?? new HashSet<string>(),
+                    RelativeRows = RelVM.AllRows.Select(row => new RelativeSettlementRow
                     {
-                        var map = BuildPlaceholderMap();
-
-                        // ВАЖНО: поддержка выключенных блоков — удаляем строки, где встретились их теги
-                        var disabled = GenVM.Settings?.GetDisabledTags()
-                                       ?? new System.Collections.Generic.HashSet<string>();
-
-                        // Снимок текстовых ячеек, чтобы удалять строки уже после прохода
-                        var textCells = generalWs.CellsUsed(c => c.DataType == XLDataType.Text).ToList();
-                        var rowsToDelete = new System.Collections.Generic.HashSet<int>();
-
-                        foreach (var cell in textCells)
+                        Id1 = row.Id1,
+                        Id2 = row.Id2,
+                        Distance = row.Distance,
+                        DeltaTotal = row.DeltaTotal,
+                        Ratio = row.Ratio
+                    }).ToList(),
+                    ActiveCycles = RawVM?.GetActiveCyclesSnapshot() ?? new Dictionary<int, List<MeasurementRow>>(),
+                    CycleHeaders = RawVM?.CycleHeaders ?? new Dictionary<int, string>(),
+                    DynamicsData = _dynSvc.Build(RawVM?.GetActiveCyclesSnapshot() ?? new Dictionary<int, List<MeasurementRow>>())
+                        .Select(s => new DynamicsSeries
                         {
-                            string t = cell.GetString().Trim();
-                            if (!t.StartsWith("/")) continue;
-
-                            if (disabled.Contains(t))
+                            Id = s.Id,
+                            Points = s.Points.Select(p => new DynamicsPoint
                             {
-                                rowsToDelete.Add(cell.Address.RowNumber);
-                                continue;
-                            }
+                                Cycle = p.Cycle,
+                                Mark = p.Mark
+                            }).ToList()
+                        }).ToList()
+                };
 
-                            if (map.TryGetValue(t, out var val))
-                                cell.Value = val;
-                        }
+                var options = new ExcelExportOptions
+                {
+                    IncludeGeneral = IncludeGeneral,
+                    IncludeRelative = IncludeRelative,
+                    IncludeGraphs = IncludeGraphs,
+                    TemplatePath = template,
+                    OutputPath = dlg.FileName
+                };
 
-                        // Удаляем строки снизу вверх
-                        foreach (var r in rowsToDelete.OrderByDescending(x => x))
-                            generalWs.Row(r).Delete();
-                    }
-                    else
-                    {
-                        generalWs.Delete();
-                    }
-
-                    if (IncludeRelative)
-                        AddRelativeSheet(wb);
-
-                    if (IncludeGraphs)
-                    {
-                        AddDynamicsSheet(wb);
-                    }
-                    else
-                    {
-                        var dynWs = wb.Worksheets.FirstOrDefault(
-                            ws => string.Equals(ws.Name, "Графики динамики", System.StringComparison.OrdinalIgnoreCase));
-                        dynWs?.Delete();
-                    }
-
-                    wb.Save();
-                }
+                var exportService = new ExcelExportService();
+                exportService.ExportToExcel(options, exportData);
 
                 if (IncludeGraphs)
                 {
-                    RunSta(() => BuildChartFromDynTable_Quick_NoPIA(
+                    RunSta(() => exportService.BuildExcelChart(
                         filePath: dlg.FileName,
                         dataSheetName: "Графики динамики",
                         tableName: "DynTable",
@@ -694,164 +676,6 @@ namespace Osadka.ViewModels
             t.Join();
         }
 
-        private static void BuildChartFromDynTable_Quick_NoPIA(
-            string filePath,
-            string dataSheetName = "Графики динамики",
-            string tableName = "DynTable",
-            string chartSheetName = "Графики динамики",
-            int left = 40, int top = 200, int width = 920, int height = 440,
-            bool deleteOldCharts = true)
-        {
-            const int xlRows = 1;
-            const int xlLine = 4;
-
-            object app = null, wb = null, wsData = null, wsChart = null;
-            object workbooks = null, worksheets = null;
-            object listObjects = null, lo = null, loRange = null, dataBodyRange = null;
-            object chartObjects = null, chartObj = null, chart = null;
-
-            try
-            {
-                var excelType = System.Type.GetTypeFromProgID("Excel.Application", throwOnError: false);
-                if (excelType == null)
-                    throw new System.InvalidOperationException("На этом ПК не установлен Microsoft Excel.");
-
-                app = System.Activator.CreateInstance(excelType);
-                excelType.InvokeMember("Visible",
-                    System.Reflection.BindingFlags.SetProperty, null, app, new object[] { false });
-                excelType.InvokeMember("DisplayAlerts",
-                    System.Reflection.BindingFlags.SetProperty, null, app, new object[] { false });
-
-                // Workbooks.Open(filePath)
-                workbooks = excelType.InvokeMember("Workbooks",
-                    System.Reflection.BindingFlags.GetProperty, null, app, null);
-                wb = workbooks.GetType().InvokeMember("Open",
-                    System.Reflection.BindingFlags.InvokeMethod, null, workbooks, new object[] { filePath });
-
-                // Worksheets[dataSheetName]
-                worksheets = wb.GetType().InvokeMember("Worksheets",
-                    System.Reflection.BindingFlags.GetProperty, null, wb, null);
-                try
-                {
-                    wsData = worksheets.GetType().InvokeMember("Item",
-                        System.Reflection.BindingFlags.GetProperty, null, worksheets, new object[] { dataSheetName });
-                }
-                catch
-                {
-                    throw new System.InvalidOperationException($"Не найден лист данных '{dataSheetName}'.");
-                }
-
-                // Таблица ListObjects[tableName]
-                listObjects = wsData.GetType().InvokeMember("ListObjects",
-                    System.Reflection.BindingFlags.GetProperty, null, wsData, null);
-                try
-                {
-                    lo = listObjects.GetType().InvokeMember("Item",
-                        System.Reflection.BindingFlags.GetProperty, null, listObjects, new object[] { tableName });
-                }
-                catch
-                {
-                    throw new System.InvalidOperationException($"Не найдена таблица '{tableName}' на листе '{dataSheetName}'.");
-                }
-
-                dataBodyRange = lo.GetType().InvokeMember("DataBodyRange",
-                    System.Reflection.BindingFlags.GetProperty, null, lo, null);
-                if (dataBodyRange == null)
-                    throw new System.InvalidOperationException("В таблице нет строк данных.");
-                loRange = lo.GetType().InvokeMember("Range",
-                    System.Reflection.BindingFlags.GetProperty, null, lo, null);
-
-                try
-                {
-                    wsChart = worksheets.GetType().InvokeMember("Item",
-                        System.Reflection.BindingFlags.GetProperty, null, worksheets, new object[] { chartSheetName });
-                }
-                catch
-                {
-                    wsChart = worksheets.GetType().InvokeMember("Add",
-                        System.Reflection.BindingFlags.InvokeMethod, null, worksheets, null);
-                    wsChart.GetType().InvokeMember("Name",
-                        System.Reflection.BindingFlags.SetProperty, null, wsChart, new object[] { chartSheetName });
-                }
-                object missing = System.Type.Missing;
-                try
-                {
-                    chartObjects = wsChart.GetType().InvokeMember("ChartObjects",
-                        System.Reflection.BindingFlags.InvokeMethod, null, wsChart, new object[] { missing });
-                }
-                catch
-                {
-                    chartObjects = wsChart.GetType().InvokeMember("ChartObjects",
-                        System.Reflection.BindingFlags.InvokeMethod, null, wsChart, null);
-                }
-
-                if (deleteOldCharts && chartObjects != null)
-                {
-                    try
-                    {
-                        chartObjects.GetType().InvokeMember("Delete",
-                            System.Reflection.BindingFlags.InvokeMethod, null, chartObjects, null);
-                    }
-                    catch
-                    {
-                        try
-                        {
-                            var cntObj = chartObjects.GetType().InvokeMember("Count",
-                                System.Reflection.BindingFlags.GetProperty, null, chartObjects, null);
-                            int cnt = cntObj is int i ? i : System.Convert.ToInt32(cntObj);
-                            for (int j = cnt; j >= 1; j--)
-                            {
-                                var co = chartObjects.GetType().InvokeMember("Item",
-                                    System.Reflection.BindingFlags.GetProperty, null, chartObjects, new object[] { j });
-                                co.GetType().InvokeMember("Delete",
-                                    System.Reflection.BindingFlags.InvokeMethod, null, co, null);
-                                Marshal.FinalReleaseComObject(co);
-                            }
-                        }
-                        catch { }
-                    }
-
-                    try
-                    {
-                        chartObjects = wsChart.GetType().InvokeMember("ChartObjects",
-                            System.Reflection.BindingFlags.InvokeMethod, null, wsChart, new object[] { missing });
-                    }
-                    catch
-                    {
-                        chartObjects = wsChart.GetType().InvokeMember("ChartObjects",
-                            System.Reflection.BindingFlags.InvokeMethod, null, wsChart, null);
-                    }
-                }
-
-                chartObj = chartObjects.GetType().InvokeMember("Add",
-                    System.Reflection.BindingFlags.InvokeMethod, null, chartObjects,
-                    new object[] { left, top, width, height });
-                chart = chartObj.GetType().InvokeMember("Chart",
-                    System.Reflection.BindingFlags.GetProperty, null, chartObj, null);
-
-                chart.GetType().InvokeMember("SetSourceData",
-                    System.Reflection.BindingFlags.InvokeMethod, null, chart, new object[] { loRange, xlRows });
-                chart.GetType().InvokeMember("ChartType",
-                    System.Reflection.BindingFlags.SetProperty, null, chart, new object[] { xlLine });
-                chart.GetType().InvokeMember("HasTitle",
-                    System.Reflection.BindingFlags.SetProperty, null, chart, new object[] { false });
-
-                wb.GetType().InvokeMember("Save", System.Reflection.BindingFlags.InvokeMethod, null, wb, null);
-            }
-            finally
-            {
-                try { wb?.GetType().InvokeMember("Close", System.Reflection.BindingFlags.InvokeMethod, null, wb, new object[] { false }); } catch { }
-                try { app?.GetType().InvokeMember("Quit", System.Reflection.BindingFlags.InvokeMethod, null, app, null); } catch { }
-
-                void rel(object o) { if (o != null) Marshal.FinalReleaseComObject(o); }
-                rel(chart); rel(chartObj); rel(chartObjects);
-                rel(wsChart); rel(loRange); rel(dataBodyRange); rel(lo); rel(listObjects);
-                rel(wsData); rel(worksheets); rel(wb); rel(workbooks); rel(app);
-
-                System.GC.Collect(); System.GC.WaitForPendingFinalizers();
-                System.GC.Collect(); System.GC.WaitForPendingFinalizers();
-            }
-        }
 
         private Dictionary<string, string> BuildPlaceholderMap()
         {
@@ -933,151 +757,5 @@ namespace Osadka.ViewModels
             return map;
         }
 
-        private void AddRelativeSheet(XLWorkbook wb)
-        {
-            // Получаем/создаём лист
-            var ws = wb.Worksheets.FirstOrDefault(s =>
-                         s.Name.Equals("Относительная разность", StringComparison.OrdinalIgnoreCase))
-                     ?? wb.AddWorksheet("Относительная разность");
-            ws.Clear();
-
-            // Заголовки (как на скрине)
-            ws.Cell(1, 1).Value = "№1";
-            ws.Cell(1, 2).Value = "№2";
-            ws.Cell(1, 3).Value = "Dist, мм";
-            ws.Cell(1, 4).Value = "ΔS, мм";
-            ws.Cell(1, 5).Value = "ΔS/Dist";
-
-            // Хелпер: число или прочерк
-            static void SetNumberOrDash(IXLCell cell, double value, string? format = null)
-            {
-                if (double.IsNaN(value) || double.IsInfinity(value))
-                {
-                    cell.Value = "-";
-                   // cell.XLDataType(XLDataType.Text);           // вместо cell.DataType = ...
-                    cell.Style.NumberFormat.Format = "@";        // принудительно "Текст"
-                }
-                else
-                {
-                    cell.Value = value;
-                    if (!string.IsNullOrWhiteSpace(format))
-                        cell.Style.NumberFormat.Format = format;
-                }
-            }
-
-            // Данные
-            int r = 2;
-            foreach (var row in RelVM.AllRows)
-            {
-                ws.Cell(r, 1).Value = row.Id1;
-                ws.Cell(r, 2).Value = row.Id2;
-
-                // Форматы при необходимости можно подправить
-                SetNumberOrDash(ws.Cell(r, 3), row.Distance, "0.0");      // мм
-                SetNumberOrDash(ws.Cell(r, 4), row.DeltaTotal, "0.0");      // мм
-                SetNumberOrDash(ws.Cell(r, 5), row.Ratio, "0.000000"); // безразмерный
-
-                r++;
-            }
-
-            // Оформление
-            ws.Range(1, 1, 1, 5).Style.Font.Bold = true;
-            ws.Columns(1, 5).AdjustToContents();
-            ws.SheetView.FreezeRows(1);
-        }
-
-        private void AddDynamicsSheet(XLWorkbook wb)
-        {
-            const string sheetName = "Графики динамики";
-            const string tableName = "DynTable";
-
-            var ws = wb.Worksheets.FirstOrDefault(s =>
-                         s.Name.Equals(sheetName, System.StringComparison.OrdinalIgnoreCase))
-                     ?? wb.AddWorksheet(sheetName);
-
-            var activeCycles = RawVM?.GetActiveCyclesSnapshot()
-                               ?? new Dictionary<int, List<MeasurementRow>>();
-            var cycles = activeCycles.Keys.OrderBy(c => c).ToList();
-
-            var seriesData = _dynSvc.Build(activeCycles);
-            var used = new Dictionary<string, int>(StringComparer.CurrentCultureIgnoreCase);
-            string Unique(string h)
-            {
-                if (string.IsNullOrWhiteSpace(h)) h = "Cycle";
-                if (used.TryGetValue(h, out var n))
-                {
-                    n++;
-                    used[h] = n;
-                    return $"{h} #{n}";
-                }
-                used[h] = 1;
-                return h;
-            }
-            ws.Cell(1, 1).Value = "Id";
-            for (int i = 0; i < cycles.Count; i++)
-            {
-                int cyc = cycles[i];
-                string headerText;
-                if (RawVM.CycleHeaders.TryGetValue(cyc, out var rawLabel))
-                    headerText = CycleLabelParsing.ExtractDateTail(rawLabel) ?? rawLabel;
-                else
-                    headerText = $"Cycle {cyc}";
-
-                // NEW: исключаем дубликаты
-                ws.Cell(1, i + 2).Value = Unique(headerText.Trim());
-            }
-
-            var colByCycle = cycles
-                .Select((cycle, idx) => new { cycle, col = idx + 2 })
-                .ToDictionary(x => x.cycle, x => x.col);
-
-            int r = 2;
-            foreach (var ser in seriesData)
-            {
-                ws.Cell(r, 1).Value = ser.Id;
-
-                foreach (var pt in ser.Points)
-                {
-                    if (!colByCycle.TryGetValue(pt.Cycle, out int col)) continue;
-
-                    var cell = ws.Cell(r, col);
-                    cell.Value = pt.Mark;
-                }
-                r++;
-            }
-
-            int lastRow = Math.Max(2, r - 1);
-            int lastCol = Math.Max(2, cycles.Count + 1);
-            var dataRange = ws.Range(1, 1, lastRow, lastCol);
-
-            ws.Row(1).Style.Font.Bold = true;
-            dataRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            ws.Columns(1, lastCol).AdjustToContents();
-
-            var dynTable = ws.Tables.FirstOrDefault(t =>
-                t.Name.Equals(tableName, System.StringComparison.OrdinalIgnoreCase));
-
-            if (dynTable != null)
-            {
-                dynTable.Resize(dataRange);
-                dynTable.ShowAutoFilter = false;
-            }
-            else
-            {
-                var created = dataRange.CreateTable(tableName);
-                created.ShowAutoFilter = false;
-                created.Theme = XLTableTheme.TableStyleMedium2;
-            }
-
-            var wbDynData = wb.DefinedNames.FirstOrDefault(n =>
-                n.Name.Equals("DynData", System.StringComparison.OrdinalIgnoreCase));
-            wbDynData?.Delete();
-
-            var wsDynData = ws.DefinedNames.FirstOrDefault(n =>
-                n.Name.Equals("DynData", System.StringComparison.OrdinalIgnoreCase));
-            wsDynData?.Delete();
-            
-            wb.CalculateMode = XLCalculateMode.Auto;
-        }
     }
 }
