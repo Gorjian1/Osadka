@@ -1,4 +1,8 @@
-﻿using Microsoft.Win32;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Win32;
+using Osadka.Services;
+using Osadka.Services.Abstractions;
+using Osadka.Services.Implementation;
 using Osadka.ViewModels;
 using System.Diagnostics;
 using System.IO;
@@ -8,6 +12,7 @@ namespace Osadka
 {
     public partial class App : Application
     {
+        private ServiceProvider? _serviceProvider;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -19,8 +24,15 @@ namespace Osadka
             AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
             this.DispatcherUnhandledException += OnDispatcherUnhandledException;
             TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+
+            // Configure Dependency Injection
+            var services = new ServiceCollection();
+            ConfigureServices(services);
+            _serviceProvider = services.BuildServiceProvider();
+
+            // Create MainWindow and ViewModel через DI
             var mainWindow = new MainWindow();
-            var vm = new MainViewModel();
+            var vm = _serviceProvider.GetRequiredService<MainViewModel>();
 
             if (e.Args is { Length: > 0 })
             {
@@ -36,7 +48,25 @@ namespace Osadka
             mainWindow.DataContext = vm;
             this.MainWindow = mainWindow;
             mainWindow.Show();
+        }
 
+        private void ConfigureServices(IServiceCollection services)
+        {
+            // Register services
+            services.AddSingleton<IMessageBoxService, MessageBoxService>();
+            services.AddSingleton<IFileDialogService, FileDialogService>();
+            services.AddSingleton<IFileService, FileService>();
+            services.AddSingleton<IProjectService, ProjectService>();
+            services.AddSingleton<ISettingsService, SettingsService>();
+
+            // Register existing services
+            services.AddSingleton<GeneralReportService>();
+            services.AddSingleton<RelativeReportService>();
+            services.AddSingleton<DynamicsReportService>();
+
+            // Register ViewModels
+            services.AddSingleton<RawDataViewModel>();
+            services.AddTransient<MainViewModel>(); // Transient для MainViewModel
         }
         private bool IsExtensionRegistered()
         {

@@ -17,14 +17,20 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
 using Osadka.Models;
 using Osadka.Services;
+using Osadka.Services.Abstractions;
 using Osadka.Views;
-using Telegram.Bot.Types;
 
 namespace Osadka.ViewModels
 {
     public partial class MainViewModel : ObservableObject
     {
         private string? _currentPath;
+
+        // Services (injected via DI)
+        private readonly IMessageBoxService _messageBox;
+        private readonly IFileDialogService _fileDialog;
+        private readonly IFileService _fileService;
+        private readonly IProjectService _projectService;
 
         public RawDataViewModel RawVM { get; }
         public GeneralReportViewModel GenVM { get; }
@@ -87,18 +93,33 @@ namespace Osadka.ViewModels
             string exeDir = AppContext.BaseDirectory;
             string docx = Path.Combine(exeDir, "help.docx");
 
-            if (File.Exists(docx))
-                Process.Start(new ProcessStartInfo(docx) { UseShellExecute = true });
+            if (_fileService.FileExists(docx))
+                _fileService.OpenInDefaultApp(docx);
             else
-                MessageBox.Show("Файл справки не найден.",
-                                "Справка",
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Warning);
+                _messageBox.Show("Файл справки не найден.", "Справка");
         }
 
-        public MainViewModel()
+        public MainViewModel(
+            RawDataViewModel rawDataViewModel,
+            IMessageBoxService messageBox,
+            IFileDialogService fileDialog,
+            IFileService fileService,
+            IProjectService projectService,
+            GeneralReportService generalReportService,
+            RelativeReportService relativeReportService,
+            DynamicsReportService dynamicsReportService)
         {
-            RawVM = new RawDataViewModel();
+            // Inject services
+            _messageBox = messageBox;
+            _fileDialog = fileDialog;
+            _fileService = fileService;
+            _projectService = projectService;
+
+            // Inject ViewModels and Services
+            RawVM = rawDataViewModel;
+            _dynSvc = dynamicsReportService;
+
+            // Setup event subscriptions
             RawVM.PropertyChanged += (_, e) =>
             {
                 if (e.PropertyName == nameof(RawDataViewModel.TemplatePath) ||
@@ -118,12 +139,9 @@ namespace Osadka.ViewModels
             foreach (var row in RawVM.CoordRows)
                 SubscribeCoordRow(row);
 
-            var genSvc = new GeneralReportService();
-            var relSvc = new RelativeReportService();
-
-            GenVM = new GeneralReportViewModel(RawVM, genSvc, relSvc);
-            RelVM = new RelativeSettlementsViewModel(RawVM, relSvc);
-            _dynSvc = new DynamicsReportService();
+            // Create other ViewModels
+            GenVM = new GeneralReportViewModel(RawVM, generalReportService, relativeReportService);
+            RelVM = new RelativeSettlementsViewModel(RawVM, relativeReportService);
 
             HelpCommand = new RelayCommand(OpenHelp);
             NavigateCommand = new RelayCommand<string>(Navigate);
@@ -184,13 +202,7 @@ namespace Osadka.ViewModels
 
             try
             {
-                var json = System.IO.File.ReadAllText(path);
-
-                using var doc = System.Text.Json.JsonDocument.Parse(json);
-                string? dwgPath = doc.RootElement.TryGetProperty("DwgPath", out var p) ? p.GetString() : null;
-
-                var data = System.Text.Json.JsonSerializer.Deserialize<ProjectData>(json)
-                           ?? throw new InvalidOperationException("Невалидный формат");
+                var (data, dwgPath) = _projectService.Load(path);
 
                 vm.Header.CycleNumber = data.Cycle;
                 vm.Header.MaxNomen = data.MaxNomen;
@@ -216,12 +228,11 @@ namespace Osadka.ViewModels
             }
             catch (Exception ex)
             {
-                System.Windows.MessageBox.Show(
+                _messageBox.ShowWithOptions(
                     $"Ошибка при загрузке проекта:\n{ex.Message}",
                     "Ошибка",
-                    System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Error
-                );
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
 
@@ -229,13 +240,10 @@ namespace Osadka.ViewModels
 
         private void OpenProject()
         {
-            var dlg = new OpenFileDialog
-            {
-                Filter = "Osadka Project (*.osd)|*.osd|All Files|*.*"
-            };
-            if (dlg.ShowDialog() != true) return;
+            var path = _fileDialog.OpenFile("Osadka Project (*.osd)|*.osd|All Files|*.*");
+            if (path == null) return;
 
-            LoadProject(dlg.FileName);
+            LoadProject(path);
         }
 
         private void SaveProject()
@@ -250,13 +258,11 @@ namespace Osadka.ViewModels
 
         private void SaveAsProject()
         {
-            var dlg = new SaveFileDialog
-            {
-                Filter = "Osadka Project (*.osd)|*.osd"
-            };
-            if (dlg.ShowDialog() != true) return;
-            SaveTo(dlg.FileName);
-            _currentPath = dlg.FileName;
+            var path = _fileDialog.SaveFile("Osadka Project (*.osd)|*.osd");
+            if (path == null) return;
+
+            SaveTo(path);
+            _currentPath = path;
         }
 
         void SaveTo(string path)
@@ -280,14 +286,8 @@ namespace Osadka.ViewModels
                         cycleKv => cycleKv.Value.ToList()
                     ))
             };
-            var node = JsonSerializer.SerializeToNode(data)!.AsObject();
-            node["DwgPath"] = vm.DrawingPath;
 
-            File.WriteAllText(
-                path,
-                node.ToJsonString(new JsonSerializerOptions { WriteIndented = true })
-            );
-
+            _projectService.Save(path, data, vm.DrawingPath);
             ResetDirty();
         }
 
