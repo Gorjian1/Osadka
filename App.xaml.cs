@@ -58,6 +58,7 @@ namespace Osadka
             services.AddSingleton<IFileService, FileService>();
             services.AddSingleton<IProjectService, ProjectService>();
             services.AddSingleton<ISettingsService, SettingsService>();
+            services.AddSingleton<IExportService, ExcelExportService>();
 
             // Register existing services
             services.AddSingleton<GeneralReportService>();
