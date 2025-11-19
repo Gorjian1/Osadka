@@ -47,7 +47,6 @@
     <PackageReference Include="ScottPlot" Version="5.0.55" />
     <PackageReference Include="ScottPlot.WPF" Version="5.0.55" />
     <PackageReference Include="squirrel.windows" Version="2.0.1" />
-    <PackageReference Include="Telegram.Bot" Version="22.6.0" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="template.xlsx">

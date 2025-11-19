@@ -1,8 +1,5 @@
 ﻿using Microsoft.Win32;
-using Osadka.Services;
 using Osadka.ViewModels;
-using System.Configuration;
-using System.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -18,18 +15,10 @@ namespace Osadka
                 RegisterFileExtension();
             base.OnStartup(e);
 
-            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
-            TelegramReporter.SendAsync($"Crash (AppDomain):\n{(e.ExceptionObject as Exception)?.Message}").Wait();
-            this.DispatcherUnhandledException += (_, e) =>
-            {
-                //TelegramReporter.SendAsync($"Crash (UI):\n{e.Exception.Message}").Wait();
-                e.Handled = true;
-            };
-            TaskScheduler.UnobservedTaskException += (_, e) =>
-            {
-               // TelegramReporter.SendAsync($"Crash (Task):\n{e.Exception.Message}").Wait();
-                e.SetObserved();
-            };
+            // Global exception handlers
+            AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+            this.DispatcherUnhandledException += OnDispatcherUnhandledException;
+            TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
             var mainWindow = new MainWindow();
             var vm = new MainViewModel();
 
@@ -110,19 +99,25 @@ namespace Osadka
         private void OnUnhandledException(object _, UnhandledExceptionEventArgs e)
         {
             if (e.ExceptionObject is Exception ex)
-                TelegramReporter.SendAsync($"Crash (AppDomain):\n{ex}").Wait();
+            {
+                // TODO: Add logging here (e.g., Serilog, NLog)
+                MessageBox.Show($"Критическая ошибка:\n{ex.Message}",
+                    "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void OnDispatcherUnhandledException(object _,
             System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
-            TelegramReporter.SendAsync($"Crash (UI):\n{e.Exception}").Wait();
+            // TODO: Add logging here
+            MessageBox.Show($"Ошибка UI:\n{e.Exception.Message}",
+                "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             e.Handled = true;
         }
 
         private void OnUnobservedTaskException(object _, UnobservedTaskExceptionEventArgs e)
         {
-            TelegramReporter.SendAsync($"Crash (Task):\n{e.Exception}").Wait();
+            // TODO: Add logging here
             e.SetObserved();
         }
     }
