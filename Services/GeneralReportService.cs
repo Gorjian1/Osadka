@@ -27,8 +27,11 @@ namespace Osadka.Services
             double limitSp,
             double limitCalc)
         {
-            var total = rows.Where(r => r.Total is { } v && !double.IsNaN(v)).ToList();
-            var settl = rows.Where(r => r.Settl is { } v && !double.IsNaN(v)).ToList();
+            // Фильтруем точки: исключаем точки со статусами, но оставляем их в исходных данных
+            var validRows = rows.Where(r => r.IsValidForCalculation()).ToList();
+
+            var total = validRows.Where(r => r.Total is { } v && !double.IsNaN(v)).ToList();
+            var settl = validRows.Where(r => r.Settl is { } v && !double.IsNaN(v)).ToList();
 
             static Extremum GetMax(IEnumerable<MeasurementRow> src, Func<MeasurementRow, double?> sel)
             {

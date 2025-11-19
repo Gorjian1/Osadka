@@ -28,8 +28,11 @@ namespace Osadka.Services
             double limitSp,
             double limitCalc)
         {
-            // НИКАКОЙ фильтрации по Total — пары строим строго по индексам!
-            var points = coordsAligned.Zip(rows, (c, r) => (Coord: c, Row: r)).ToList();
+            // Исключаем точки со статусами из расчёта относительных осадок
+            // Точки с "уничтожена", "новая", "-" и т.д. не участвуют в парах
+            var points = coordsAligned.Zip(rows, (c, r) => (Coord: c, Row: r))
+                                      .Where(p => p.Row.IsValidForCalculation())
+                                      .ToList();
 
             int n = points.Count;
             var all = new List<RelativeRow>(n > 1 ? n * (n - 1) / 2 : 0);

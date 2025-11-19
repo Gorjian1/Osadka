@@ -27,7 +27,11 @@ namespace Osadka.Services
                     {
                         var row = kv.Value.FirstOrDefault(r => r.Id == id);
 
-                        return row?.Total is double m
+                        // Исключаем точки со статусами ("уничтожена", "новая" и т.д.)
+                        if (row == null || !row.IsValidForCalculation())
+                            return (PointXY?)null;
+
+                        return row.Total is double m
                             ? new PointXY(kv.Key, m)
                             : (PointXY?)null;
                     })
