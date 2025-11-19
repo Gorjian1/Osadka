@@ -4,10 +4,13 @@ using Osadka.Services;
 using Osadka.Services.Abstractions;
 using Osadka.Services.Implementation;
 using Osadka.ViewModels;
+using Serilog;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
+
 namespace Osadka
 {
     public partial class App : Application
@@ -16,6 +19,26 @@ namespace Osadka
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            // Настройка Serilog
+            var logPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Osadka",
+                "logs",
+                "osadka-.log");
+
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .WriteTo.File(
+                    logPath,
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 7,
+                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+                .CreateLogger();
+
+            Log.Information("========================================");
+            Log.Information("Osadka запущена, версия {Version}", GetType().Assembly.GetName().Version);
+            Log.Information("========================================");
+
             if (!IsExtensionRegistered())
                 RegisterFileExtension();
             base.OnStartup(e);
@@ -128,30 +151,44 @@ namespace Osadka
             uint uFlags,
             IntPtr dwItem1,
             IntPtr dwItem2);
-    
+
         private void OnUnhandledException(object _, UnhandledExceptionEventArgs e)
         {
             if (e.ExceptionObject is Exception ex)
             {
-                // TODO: Add logging here (e.g., Serilog, NLog)
-                MessageBox.Show($"Критическая ошибка:\n{ex.Message}",
-                    "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                Log.Fatal(ex, "Критическая необработанная ошибка (AppDomain.UnhandledException)");
+
+                var errorDetails = $"Критическая ошибка:\n{ex.Message}\n\n" +
+                                 $"Тип: {ex.GetType().Name}\n" +
+                                 $"Логи сохранены в: %AppData%\\Osadka\\logs";
+
+                MessageBox.Show(errorDetails, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
         private void OnDispatcherUnhandledException(object _,
             System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
-            // TODO: Add logging here
-            MessageBox.Show($"Ошибка UI:\n{e.Exception.Message}",
-                "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            Log.Error(e.Exception, "Необработанная ошибка UI (Dispatcher)");
+
+            var errorDetails = $"Ошибка UI:\n{e.Exception.Message}\n\n" +
+                             $"Логи сохранены в: %AppData%\\Osadka\\logs";
+
+            MessageBox.Show(errorDetails, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             e.Handled = true;
         }
 
         private void OnUnobservedTaskException(object _, UnobservedTaskExceptionEventArgs e)
         {
-            // TODO: Add logging here
+            Log.Error(e.Exception, "Необработанная ошибка асинхронной задачи (Task)");
             e.SetObserved();
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            Log.Information("Osadka завершена");
+            Log.CloseAndFlush();
+            base.OnExit(e);
         }
     }
 

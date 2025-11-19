@@ -1,6 +1,7 @@
 using ClosedXML.Excel;
 using Osadka.Services.Abstractions;
 using Osadka.ViewModels;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -149,22 +150,59 @@ public class ExcelExportService : IExportService
 
             if (includeGraphs)
             {
-                RunSta(() => BuildChartFromDynTable_Quick_NoPIA(
-                    filePath: outputPath,
-                    dataSheetName: "Графики динамики",
-                    tableName: "DynTable",
-                    chartSheetName: "Графики динамики",
-                    left: 40, top: 200, width: 920, height: 440,
-                    deleteOldCharts: true
-                ));
+                try
+                {
+                    Log.Information("Начало создания графиков через COM Interop для файла {FilePath}", outputPath);
+
+                    if (!IsExcelAvailable())
+                    {
+                        Log.Warning("Microsoft Excel недоступен для создания графиков");
+                        var result = _messageBox.ShowWithOptions(
+                            "Microsoft Excel недоступен.\n\n" +
+                            "Графики не могут быть созданы, но отчёт сохранён без графиков.\n\n" +
+                            "Для создания графиков необходим установленный Microsoft Office Excel.",
+                            "Предупреждение",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                    }
+                    else
+                    {
+                        RunSta(() => BuildChartFromDynTable_Quick_NoPIA(
+                            filePath: outputPath,
+                            dataSheetName: "Графики динамики",
+                            tableName: "DynTable",
+                            chartSheetName: "Графики динамики",
+                            left: 40, top: 200, width: 920, height: 440,
+                            deleteOldCharts: true
+                        ));
+
+                        Log.Information("Графики успешно созданы");
+                    }
+                }
+                catch (Exception chartEx)
+                {
+                    Log.Error(chartEx, "Ошибка при создании графиков через COM Interop");
+
+                    var result = _messageBox.ShowWithOptions(
+                        $"Ошибка создания графиков:\n{chartEx.Message}\n\n" +
+                        "Отчёт сохранён без графиков.\n\n" +
+                        $"Детали ошибки сохранены в логах.\nТип ошибки: {chartEx.GetType().Name}",
+                        "Предупреждение",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
             }
 
             _messageBox.Show("Экспорт завершён", "Экспорт");
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "Критическая ошибка экспорта отчёта");
+
             _messageBox.ShowWithOptions(
-                $"Ошибка экспорта: {ex.Message}",
+                $"Ошибка экспорта: {ex.Message}\n\n" +
+                $"Тип: {ex.GetType().Name}\n" +
+                $"Логи: %AppData%\\Osadka\\logs",
                 "Экспорт",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -402,12 +440,68 @@ public class ExcelExportService : IExportService
         wb.CalculateMode = XLCalculateMode.Auto;
     }
 
+    /// <summary>
+    /// Проверяет доступность Microsoft Excel через COM
+    /// </summary>
+    private static bool IsExcelAvailable()
+    {
+        try
+        {
+            var excelType = Type.GetTypeFromProgID("Excel.Application", throwOnError: false);
+            if (excelType == null)
+            {
+                Log.Warning("Excel.Application не зарегистрирован в COM");
+                return false;
+            }
+
+            // Пытаемся создать экземпляр
+            object? app = Activator.CreateInstance(excelType);
+            if (app == null)
+            {
+                Log.Warning("Не удалось создать экземпляр Excel.Application");
+                return false;
+            }
+
+            // Закрываем созданный экземпляр
+            excelType.InvokeMember("Quit", System.Reflection.BindingFlags.InvokeMethod, null, app, null);
+            if (Marshal.IsComObject(app))
+                Marshal.ReleaseComObject(app);
+
+            Log.Debug("Excel доступен для COM Automation");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Ошибка при проверке доступности Excel");
+            return false;
+        }
+    }
+
     private static void RunSta(Action action)
     {
-        var t = new System.Threading.Thread(() => action()) { IsBackground = true };
+        Exception? thrownException = null;
+
+        var t = new System.Threading.Thread(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                thrownException = ex;
+                Log.Error(ex, "Ошибка в STA потоке при выполнении COM операции");
+            }
+        })
+        { IsBackground = true };
+
         t.SetApartmentState(System.Threading.ApartmentState.STA);
         t.Start();
         t.Join();
+
+        // Пробрасываем исключение из потока
+        if (thrownException != null)
+            throw new InvalidOperationException("Ошибка в COM Interop потоке", thrownException);
     }
 
     private static void BuildChartFromDynTable_Quick_NoPIA(
@@ -418,6 +512,10 @@ public class ExcelExportService : IExportService
         int left = 40, int top = 200, int width = 920, int height = 440,
         bool deleteOldCharts = true)
     {
+        Log.Debug("BuildChartFromDynTable_Quick_NoPIA: Начало создания графика для файла {FilePath}", filePath);
+        Log.Debug("Параметры: dataSheet={DataSheet}, table={Table}, chartSheet={ChartSheet}",
+            dataSheetName, tableName, chartSheetName);
+
         const int xlRows = 1;
         const int xlLine = 4;
 
@@ -428,96 +526,200 @@ public class ExcelExportService : IExportService
 
         try
         {
+            // Шаг 1: Получение типа Excel.Application
+            Log.Debug("Шаг 1: Получение типа Excel.Application через ProgID");
             var excelType = Type.GetTypeFromProgID("Excel.Application", throwOnError: false);
-            if (excelType == null) return;
+            if (excelType == null)
+            {
+                Log.Error("Excel.Application ProgID не найден - Excel не зарегистрирован в COM");
+                throw new InvalidOperationException("Excel.Application не зарегистрирован");
+            }
+            Log.Debug("Excel.Application тип получен: {TypeName}", excelType.FullName);
 
+            // Шаг 2: Создание экземпляра Excel
+            Log.Debug("Шаг 2: Создание экземпляра Excel.Application");
             app = Activator.CreateInstance(excelType);
-            if (app == null) return;
+            if (app == null)
+            {
+                Log.Error("Не удалось создать экземпляр Excel.Application");
+                throw new InvalidOperationException("Не удалось создать экземпляр Excel");
+            }
+            Log.Debug("Excel.Application экземпляр создан успешно");
 
+            // Шаг 3: Настройка свойств Excel
+            Log.Debug("Шаг 3: Настройка Visible=false и DisplayAlerts=false");
             excelType.InvokeMember("Visible", System.Reflection.BindingFlags.SetProperty,
                 null, app, new object[] { false });
             excelType.InvokeMember("DisplayAlerts", System.Reflection.BindingFlags.SetProperty,
                 null, app, new object[] { false });
+            Log.Debug("Свойства Excel настроены");
 
+            // Шаг 4: Открытие workbook
+            Log.Debug("Шаг 4: Открытие файла {FilePath}", filePath);
             workbooks = excelType.InvokeMember("Workbooks", System.Reflection.BindingFlags.GetProperty,
                 null, app, null);
             var workbooksType = workbooks.GetType();
 
             wb = workbooksType.InvokeMember("Open", System.Reflection.BindingFlags.InvokeMethod,
                 null, workbooks, new object[] { filePath });
+            if (wb == null)
+            {
+                Log.Error("Не удалось открыть файл {FilePath}", filePath);
+                throw new InvalidOperationException($"Не удалось открыть файл: {filePath}");
+            }
             var wbType = wb.GetType();
+            Log.Debug("Workbook открыт успешно");
 
+            // Шаг 5: Получение листов
+            Log.Debug("Шаг 5: Получение коллекции Worksheets");
             worksheets = wbType.InvokeMember("Worksheets", System.Reflection.BindingFlags.GetProperty,
                 null, wb, null);
             var worksheetsType = worksheets.GetType();
+            Log.Debug("Worksheets получены");
 
+            // Шаг 6: Получение листа с данными
+            Log.Debug("Шаг 6: Получение листа данных '{DataSheet}'", dataSheetName);
             wsData = worksheetsType.InvokeMember("Item", System.Reflection.BindingFlags.GetProperty,
                 null, worksheets, new object[] { dataSheetName });
+            if (wsData == null)
+            {
+                Log.Error("Лист '{DataSheet}' не найден", dataSheetName);
+                throw new InvalidOperationException($"Лист '{dataSheetName}' не найден");
+            }
             var wsDataType = wsData.GetType();
+            Log.Debug("Лист данных получен");
 
+            // Шаг 7: Получение листа для графиков
+            Log.Debug("Шаг 7: Получение листа графиков '{ChartSheet}'", chartSheetName);
             wsChart = worksheetsType.InvokeMember("Item", System.Reflection.BindingFlags.GetProperty,
                 null, worksheets, new object[] { chartSheetName });
+            if (wsChart == null)
+            {
+                Log.Error("Лист '{ChartSheet}' не найден", chartSheetName);
+                throw new InvalidOperationException($"Лист '{chartSheetName}' не найден");
+            }
             var wsChartType = wsChart.GetType();
+            Log.Debug("Лист графиков получен");
 
+            // Шаг 8: Получение таблицы ListObject
+            Log.Debug("Шаг 8: Получение ListObjects из листа данных");
             listObjects = wsDataType.InvokeMember("ListObjects", System.Reflection.BindingFlags.GetProperty,
                 null, wsData, null);
             var listObjectsType = listObjects.GetType();
 
+            Log.Debug("Шаг 9: Получение таблицы '{TableName}'", tableName);
             lo = listObjectsType.InvokeMember("Item", System.Reflection.BindingFlags.GetProperty,
                 null, listObjects, new object[] { tableName });
+            if (lo == null)
+            {
+                Log.Error("Таблица '{TableName}' не найдена на листе '{DataSheet}'", tableName, dataSheetName);
+                throw new InvalidOperationException($"Таблица '{tableName}' не найдена");
+            }
             var loType = lo.GetType();
+            Log.Debug("Таблица найдена");
 
+            // Шаг 10: Получение диапазонов таблицы
+            Log.Debug("Шаг 10: Получение Range и DataBodyRange");
             loRange = loType.InvokeMember("Range", System.Reflection.BindingFlags.GetProperty,
                 null, lo, null);
             var loRangeType = loRange.GetType();
 
             dataBodyRange = loType.InvokeMember("DataBodyRange", System.Reflection.BindingFlags.GetProperty,
                 null, lo, null);
-            if (dataBodyRange == null) return;
+            if (dataBodyRange == null)
+            {
+                Log.Error("DataBodyRange пустой - таблица '{TableName}' не содержит данных", tableName);
+                throw new InvalidOperationException($"Таблица '{tableName}' не содержит данных");
+            }
+            Log.Debug("Диапазоны данных получены");
 
+            // Шаг 11: Удаление старых графиков
             if (deleteOldCharts)
             {
+                Log.Debug("Шаг 11: Удаление старых графиков с листа '{ChartSheet}'", chartSheetName);
                 chartObjects = wsChartType.InvokeMember("ChartObjects", System.Reflection.BindingFlags.InvokeMethod,
                     null, wsChart, null);
                 if (chartObjects != null)
                 {
                     var chartObjectsType = chartObjects.GetType();
+                    var count = chartObjectsType.InvokeMember("Count", System.Reflection.BindingFlags.GetProperty,
+                        null, chartObjects, null);
+                    Log.Debug("Найдено {Count} старых графиков для удаления", count);
+
                     chartObjectsType.InvokeMember("Delete", System.Reflection.BindingFlags.InvokeMethod,
                         null, chartObjects, null);
                     if (chartObjects != null && Marshal.IsComObject(chartObjects))
                         Marshal.ReleaseComObject(chartObjects);
                     chartObjects = null;
+                    Log.Debug("Старые графики удалены");
                 }
             }
 
+            // Шаг 12: Создание нового графика
+            Log.Debug("Шаг 12: Создание нового ChartObject (left={Left}, top={Top}, width={Width}, height={Height})",
+                left, top, width, height);
             chartObjects = wsChartType.InvokeMember("ChartObjects", System.Reflection.BindingFlags.InvokeMethod,
                 null, wsChart, null);
             var chartObjectsType2 = chartObjects.GetType();
 
             chartObj = chartObjectsType2.InvokeMember("Add", System.Reflection.BindingFlags.InvokeMethod,
                 null, chartObjects, new object[] { left, top, width, height });
+            if (chartObj == null)
+            {
+                Log.Error("Не удалось создать ChartObject");
+                throw new InvalidOperationException("Не удалось создать ChartObject");
+            }
             var chartObjType = chartObj.GetType();
+            Log.Debug("ChartObject создан");
 
+            // Шаг 13: Получение объекта Chart
+            Log.Debug("Шаг 13: Получение Chart из ChartObject");
             chart = chartObjType.InvokeMember("Chart", System.Reflection.BindingFlags.GetProperty,
                 null, chartObj, null);
+            if (chart == null)
+            {
+                Log.Error("Не удалось получить Chart из ChartObject");
+                throw new InvalidOperationException("Не удалось получить Chart");
+            }
             var chartType = chart.GetType();
+            Log.Debug("Chart получен");
 
+            // Шаг 14: Настройка источника данных
+            Log.Debug("Шаг 14: Установка источника данных (SetSourceData)");
             chartType.InvokeMember("SetSourceData", System.Reflection.BindingFlags.InvokeMethod,
                 null, chart, new object[] { dataBodyRange, xlRows });
+            Log.Debug("Источник данных установлен");
 
+            // Шаг 15: Установка типа графика
+            Log.Debug("Шаг 15: Установка типа графика xlLine={XlLine}", xlLine);
             chartType.InvokeMember("ChartType", System.Reflection.BindingFlags.SetProperty,
                 null, chart, new object[] { xlLine });
+            Log.Debug("Тип графика установлен");
 
+            // Шаг 16: Сохранение и закрытие
+            Log.Debug("Шаг 16: Сохранение workbook");
             wbType.InvokeMember("Save", System.Reflection.BindingFlags.InvokeMethod,
                 null, wb, null);
+            Log.Debug("Workbook сохранён");
+
+            Log.Debug("Шаг 17: Закрытие workbook");
             wbType.InvokeMember("Close", System.Reflection.BindingFlags.InvokeMethod,
                 null, wb, new object[] { false });
+            Log.Debug("Workbook закрыт");
 
+            Log.Debug("Шаг 18: Завершение работы Excel");
             excelType.InvokeMember("Quit", System.Reflection.BindingFlags.InvokeMethod,
                 null, app, null);
+            Log.Information("График успешно создан для файла {FilePath}", filePath);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Ошибка при создании графика через COM Interop на одном из шагов");
+            throw;
         }
         finally
         {
+            Log.Debug("Освобождение COM объектов");
             if (chart != null && Marshal.IsComObject(chart)) Marshal.ReleaseComObject(chart);
             if (chartObj != null && Marshal.IsComObject(chartObj)) Marshal.ReleaseComObject(chartObj);
             if (chartObjects != null && Marshal.IsComObject(chartObjects)) Marshal.ReleaseComObject(chartObjects);
@@ -534,6 +736,7 @@ public class ExcelExportService : IExportService
 
             System.GC.Collect(); System.GC.WaitForPendingFinalizers();
             System.GC.Collect(); System.GC.WaitForPendingFinalizers();
+            Log.Debug("COM объекты освобождены, GC выполнен");
         }
     }
 }
