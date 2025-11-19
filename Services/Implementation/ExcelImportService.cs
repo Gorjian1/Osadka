@@ -2,7 +2,6 @@ using ClosedXML.Excel;
 using Osadka.Core.Units;
 using Osadka.Models;
 using Osadka.Services.Abstractions;
-using Osadka.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -18,7 +17,7 @@ namespace Osadka.Services.Implementation;
 /// </summary>
 public class ExcelImportService : IExcelImportService
 {
-    public IExcelImportService.ImportResult? ImportFromExcel(string filePath, RawDataViewModel.CoordUnits coordUnit)
+    public IExcelImportService.ImportResult? ImportFromExcel(string filePath, Unit coordUnit)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
             return null;
@@ -148,7 +147,7 @@ public class ExcelImportService : IExcelImportService
         IXLWorksheet sheet,
         List<(int Row, IXLCell Cell)> headers,
         List<int> cycleCols,
-        RawDataViewModel.CoordUnits coordUnit,
+        Unit coordUnit,
         IExcelImportService.ImportResult result)
     {
         if (headers == null || headers.Count == 0)
@@ -202,10 +201,9 @@ public class ExcelImportService : IExcelImportService
                     var (total, totalRaw) = ParseCell(sheet.Cell(r, startCol + 2));
 
                     // Конвертируем в мм
-                    var unit = MapCoordUnit(coordUnit);
-                    if (mark.HasValue) mark = UnitConverter.ToMm(mark.Value, unit);
-                    if (settl.HasValue) settl = UnitConverter.ToMm(settl.Value, unit);
-                    if (total.HasValue) total = UnitConverter.ToMm(total.Value, unit);
+                    if (mark.HasValue) mark = UnitConverter.ToMm(mark.Value, coordUnit);
+                    if (settl.HasValue) settl = UnitConverter.ToMm(settl.Value, coordUnit);
+                    if (total.HasValue) total = UnitConverter.ToMm(total.Value, coordUnit);
 
                     if (mark is null && settl is null && total is null &&
                         string.IsNullOrWhiteSpace(markRaw) &&
@@ -294,12 +292,4 @@ public class ExcelImportService : IExcelImportService
 
         return (null, txt);
     }
-
-    private static Unit MapCoordUnit(RawDataViewModel.CoordUnits u) => u switch
-    {
-        RawDataViewModel.CoordUnits.Millimeters => Unit.Millimeter,
-        RawDataViewModel.CoordUnits.Centimeters => Unit.Centimeter,
-        RawDataViewModel.CoordUnits.Decimeters => Unit.Decimeter,
-        _ => Unit.Meter
-    };
 }

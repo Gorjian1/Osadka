@@ -1,3 +1,4 @@
+using Osadka.Core.Units;
 using Osadka.Models;
 using System.Collections.Generic;
 
@@ -43,5 +44,5 @@ public interface IClipboardParserService
         string clipboardText,
         int cycleNumber,
         IReadOnlyList<string> existingIds,
-        RawDataViewModel.CoordUnits coordUnit);
+        Unit coordUnit);
 }

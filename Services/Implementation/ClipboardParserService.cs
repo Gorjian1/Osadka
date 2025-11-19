@@ -1,7 +1,6 @@
 using Osadka.Core.Units;
 using Osadka.Models;
 using Osadka.Services.Abstractions;
-using Osadka.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -19,7 +18,7 @@ public class ClipboardParserService : IClipboardParserService
         string clipboardText,
         int cycleNumber,
         IReadOnlyList<string> existingIds,
-        RawDataViewModel.CoordUnits coordUnit)
+        Unit coordUnit)
     {
         var result = new IClipboardParserService.ParseResult();
 
@@ -48,7 +47,6 @@ public class ClipboardParserService : IClipboardParserService
         if (cols == 2)
         {
             result.Type = IClipboardParserService.ParseResult.DataType.Coordinates;
-            var unit = MapCoordUnit(coordUnit);
 
             foreach (var ln in lines)
             {
@@ -61,8 +59,8 @@ public class ClipboardParserService : IClipboardParserService
 
                 result.Coordinates.Add(new CoordRow
                 {
-                    X = UnitConverter.ToMm(x, unit),
-                    Y = UnitConverter.ToMm(y, unit)
+                    X = UnitConverter.ToMm(x, coordUnit),
+                    Y = UnitConverter.ToMm(y, coordUnit)
                 });
             }
             return result;
@@ -173,12 +171,4 @@ public class ClipboardParserService : IClipboardParserService
         }
         return nonNumeric >= Math.Max(2, cells.Length - 1);
     }
-
-    private static Unit MapCoordUnit(RawDataViewModel.CoordUnits u) => u switch
-    {
-        RawDataViewModel.CoordUnits.Millimeters => Unit.Millimeter,
-        RawDataViewModel.CoordUnits.Centimeters => Unit.Centimeter,
-        RawDataViewModel.CoordUnits.Decimeters => Unit.Decimeter,
-        _ => Unit.Meter
-    };
 }

@@ -1,3 +1,4 @@
+using Osadka.Core.Units;
 using Osadka.Models;
 using System.Collections.Generic;
 
@@ -40,5 +41,5 @@ public interface IExcelImportService
     /// <param name="filePath">Путь к Excel файлу</param>
     /// <param name="coordUnit">Текущие единицы измерения координат (для конвертации)</param>
     /// <returns>Результат импорта или null если пользователь отменил</returns>
-    ImportResult? ImportFromExcel(string filePath, RawDataViewModel.CoordUnits coordUnit);
+    ImportResult? ImportFromExcel(string filePath, Unit coordUnit);
 }

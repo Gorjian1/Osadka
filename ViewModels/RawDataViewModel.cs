@@ -257,8 +257,7 @@ namespace Osadka.ViewModels
         // Диалог выбора шаблона
         private void OpenTemplatePicker()
         {
-            var filePath = _fileDialog.ShowOpenDialog(
-                "Выберите файл шаблона Excel",
+            var filePath = _fileDialog.OpenFile(
                 "Excel шаблоны (*.xlsx;*.xlsm)|*.xlsx;*.xlsm|Все файлы|*.*");
 
             if (filePath != null)
@@ -278,7 +277,7 @@ namespace Osadka.ViewModels
             if (!Clipboard.ContainsText()) return;
 
             var existingIds = DataRows.Select(r => r.Id).ToList();
-            var result = _clipboardParser.Parse(Clipboard.GetText(), Header.CycleNumber, existingIds, CoordUnit);
+            var result = _clipboardParser.Parse(Clipboard.GetText(), Header.CycleNumber, existingIds, Map(CoordUnit));
 
             switch (result.Type)
             {
@@ -319,9 +318,7 @@ namespace Osadka.ViewModels
         // === Импорт из Excel ===
         private void OnLoadWorkbook()
         {
-            var filePath = _fileDialog.ShowOpenDialog(
-                "Выберите файл Excel для импорта",
-                "Excel (*.xlsx;*.xlsm)|*.xlsx;*.xlsm");
+            var filePath = _fileDialog.OpenFile("Excel (*.xlsx;*.xlsm)|*.xlsx;*.xlsm");
 
             if (filePath != null)
                 ImportFromExcel(filePath);
@@ -331,7 +328,7 @@ namespace Osadka.ViewModels
         {
             try
             {
-                var result = _excelImport.ImportFromExcel(filePath, CoordUnit);
+                var result = _excelImport.ImportFromExcel(filePath, Map(CoordUnit));
                 if (result == null)
                     return; // Пользователь отменил
 
