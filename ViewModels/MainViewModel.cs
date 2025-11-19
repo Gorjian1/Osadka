@@ -244,11 +244,14 @@ namespace Osadka.ViewModels
                 vm.ObjectNumbers.Clear();
                 foreach (var k in vm.Objects.Keys.OrderBy(k => k)) vm.ObjectNumbers.Add(k);
 
-                int objectNumber = data.ObjectNumber;
-                if (!vm.ObjectNumbers.Contains(objectNumber))
+                // Для старых файлов без ObjectNumber берем первый доступный объект
+                int objectNumber = data.ObjectNumber ?? vm.ObjectNumbers.FirstOrDefault();
+                if (objectNumber == 0 || !vm.ObjectNumbers.Contains(objectNumber))
+                {
                     objectNumber = vm.ObjectNumbers.FirstOrDefault();
-                if (objectNumber == 0)
-                    objectNumber = 1;
+                    if (objectNumber == 0)
+                        objectNumber = 1;
+                }
                 vm.Header.ObjectNumber = objectNumber;
 
                 vm.CycleNumbers.Clear();
