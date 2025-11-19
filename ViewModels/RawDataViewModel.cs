@@ -70,7 +70,10 @@ namespace Osadka.ViewModels
         {
             var oldU = Map(oldVal);
             var newU = Map(newVal);
-            double k = UnitConverter.ToMm(1.0, newU) / UnitConverter.ToMm(1.0, oldU);
+            // ИСПРАВЛЕНИЕ: правильная формула - сначала переводим в мм (базовая единица), затем в новую
+            // k = (старая единица в мм) / (новая единица в мм)
+            // Пример: мм->см: k = 1/10 = 0.1, тогда 100мм * 0.1 = 10см ✓
+            double k = UnitConverter.ToMm(1.0, oldU) / UnitConverter.ToMm(1.0, newU);
 
             foreach (var p in CoordRows)
             {
