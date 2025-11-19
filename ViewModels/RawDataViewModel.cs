@@ -1,9 +1,7 @@
-﻿using ClosedXML.Excel;
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.VisualBasic;
-using Microsoft.Win32;
 using Osadka.Messages;
 using Osadka.Models;
 using Osadka.Services;
@@ -13,10 +11,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Windows;
 
 namespace Osadka.ViewModels
@@ -108,6 +104,8 @@ namespace Osadka.ViewModels
         private readonly Osadka.Services.Abstractions.ISettingsService _settings;
         private readonly Osadka.Services.Abstractions.IExcelImportService _excelImport;
         private readonly Osadka.Services.Abstractions.IClipboardParserService _clipboardParser;
+        private readonly Osadka.Services.Abstractions.IMessageBoxService _messageBox;
+        private readonly Osadka.Services.Abstractions.IFileDialogService _fileDialog;
 
         public IRelayCommand OpenTemplate { get; }
         public IRelayCommand ChooseOrOpenTemplateCommand { get; }
@@ -119,11 +117,15 @@ namespace Osadka.ViewModels
         public RawDataViewModel(
             Osadka.Services.Abstractions.ISettingsService settings,
             Osadka.Services.Abstractions.IExcelImportService excelImport,
-            Osadka.Services.Abstractions.IClipboardParserService clipboardParser)
+            Osadka.Services.Abstractions.IClipboardParserService clipboardParser,
+            Osadka.Services.Abstractions.IMessageBoxService messageBox,
+            Osadka.Services.Abstractions.IFileDialogService fileDialog)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _excelImport = excelImport ?? throw new ArgumentNullException(nameof(excelImport));
             _clipboardParser = clipboardParser ?? throw new ArgumentNullException(nameof(clipboardParser));
+            _messageBox = messageBox ?? throw new ArgumentNullException(nameof(messageBox));
+            _fileDialog = fileDialog ?? throw new ArgumentNullException(nameof(fileDialog));
 
             OpenTemplate = new RelayCommand(OpenTemplatePicker);
             ChooseOrOpenTemplateCommand = new RelayCommand(ChooseOrOpenTemplate);
@@ -228,7 +230,11 @@ namespace Osadka.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Не удалось открыть файл шаблона:\n{ex.Message}", "Шаблон", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    _messageBox.ShowWithOptions(
+                        $"Не удалось открыть файл шаблона:\n{ex.Message}",
+                        "Шаблон",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
                 }
             }
             else
@@ -241,23 +247,28 @@ namespace Osadka.ViewModels
         {
             if (!HasCustomTemplate) return;
             TemplatePath = null;
-            MessageBox.Show("Путь к пользовательскому шаблону очищен. Будет использован встроенный template.xlsx.",
-                "Шаблон", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageBox.ShowWithOptions(
+                "Путь к пользовательскому шаблону очищен. Будет использован встроенный template.xlsx.",
+                "Шаблон",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
         }
 
         // Диалог выбора шаблона
         private void OpenTemplatePicker()
         {
-            var dlg = new OpenFileDialog
+            var filePath = _fileDialog.ShowOpenDialog(
+                "Выберите файл шаблона Excel",
+                "Excel шаблоны (*.xlsx;*.xlsm)|*.xlsx;*.xlsm|Все файлы|*.*");
+
+            if (filePath != null)
             {
-                Title = "Выберите файл шаблона Excel",
-                Filter = "Excel шаблоны (*.xlsx;*.xlsm)|*.xlsx;*.xlsm|Все файлы|*.*"
-            };
-            if (dlg.ShowDialog() == true)
-            {
-                TemplatePath = dlg.FileName;
-                MessageBox.Show("Шаблон успешно выбран:\n" + TemplatePath,
-                    "Шаблон", MessageBoxButton.OK, MessageBoxImage.Information);
+                TemplatePath = filePath;
+                _messageBox.ShowWithOptions(
+                    "Шаблон успешно выбран:\n" + TemplatePath,
+                    "Шаблон",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
             }
         }
 
@@ -300,7 +311,7 @@ namespace Osadka.ViewModels
 
                 case IClipboardParserService.ParseResult.DataType.None:
                 default:
-                    MessageBox.Show("Формат буфера не поддерживается (должно быть 1-4 колонок).");
+                    _messageBox.Show("Формат буфера не поддерживается (должно быть 1-4 колонок).");
                     break;
             }
         }
@@ -308,9 +319,12 @@ namespace Osadka.ViewModels
         // === Импорт из Excel ===
         private void OnLoadWorkbook()
         {
-            var dlg = new OpenFileDialog { Filter = "Excel (*.xlsx;*.xlsm)|*.xlsx;*.xlsm" };
-            if (dlg.ShowDialog() == true)
-                ImportFromExcel(dlg.FileName);
+            var filePath = _fileDialog.ShowOpenDialog(
+                "Выберите файл Excel для импорта",
+                "Excel (*.xlsx;*.xlsm)|*.xlsx;*.xlsm");
+
+            if (filePath != null)
+                ImportFromExcel(filePath);
         }
 
         public void ImportFromExcel(string filePath)
@@ -360,8 +374,11 @@ namespace Osadka.ViewModels
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка при импорте Excel:\n{ex.Message}",
-                    "Импорт", MessageBoxButton.OK, MessageBoxImage.Error);
+                _messageBox.ShowWithOptions(
+                    $"Ошибка при импорте Excel:\n{ex.Message}",
+                    "Импорт",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
 
