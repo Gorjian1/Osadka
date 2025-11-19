@@ -32,6 +32,7 @@ namespace Osadka.ViewModels
         private readonly IFileService _fileService;
         private readonly IProjectService _projectService;
         private readonly IExportService _exportService;
+        private readonly INavigationService _navigationService;
 
         public RawDataViewModel RawVM { get; }
         public GeneralReportViewModel GenVM { get; }
@@ -46,13 +47,10 @@ namespace Osadka.ViewModels
         public IRelayCommand SaveAsProjectCommand { get; }
         public IRelayCommand QuickReportCommand { get; }
         public IRelayCommand PasteProxyCommand { get; }
-        private CoordinateExporting? _coord;
 
         private readonly HashSet<MeasurementRow> _trackedMeasurementRows = new();
         private readonly HashSet<CoordRow> _trackedCoordRows = new();
         private bool _isDirty;
-
-        private object? _currentPage;
         private bool _includeGeneral = true;
         public bool IncludeGeneral
         {
@@ -74,11 +72,7 @@ namespace Osadka.ViewModels
             set => SetProperty(ref _includeGraphs, value);
         }
 
-        public object? CurrentPage
-        {
-            get => _currentPage;
-            set => SetProperty(ref _currentPage, value);
-        }
+        public object? CurrentPage => _navigationService.CurrentPage;
 
         private static class PageKeys
         {
@@ -107,6 +101,7 @@ namespace Osadka.ViewModels
             IFileService fileService,
             IProjectService projectService,
             IExportService exportService,
+            INavigationService navigationService,
             GeneralReportService generalReportService,
             RelativeReportService relativeReportService,
             DynamicsReportService dynamicsReportService)
@@ -117,10 +112,18 @@ namespace Osadka.ViewModels
             _fileService = fileService;
             _projectService = projectService;
             _exportService = exportService;
+            _navigationService = navigationService;
 
             // Inject ViewModels and Services
             RawVM = rawDataViewModel;
             _dynSvc = dynamicsReportService;
+
+            // Create other ViewModels
+            GenVM = new GeneralReportViewModel(RawVM, generalReportService, relativeReportService);
+            RelVM = new RelativeSettlementsViewModel(RawVM, relativeReportService);
+
+            // Register navigation pages
+            RegisterPages();
 
             // Setup event subscriptions
             RawVM.PropertyChanged += (_, e) =>
@@ -142,10 +145,7 @@ namespace Osadka.ViewModels
             foreach (var row in RawVM.CoordRows)
                 SubscribeCoordRow(row);
 
-            // Create other ViewModels
-            GenVM = new GeneralReportViewModel(RawVM, generalReportService, relativeReportService);
-            RelVM = new RelativeSettlementsViewModel(RawVM, relativeReportService);
-
+            // Setup commands
             HelpCommand = new RelayCommand(OpenHelp);
             NavigateCommand = new RelayCommand<string>(Navigate);
             NewProjectCommand = new RelayCommand(NewProject);
@@ -172,22 +172,30 @@ namespace Osadka.ViewModels
                 }
             };
 
+            // Subscribe to navigation changes to notify UI
+            _navigationService.CurrentPageChanged += (_, _) => OnPropertyChanged(nameof(CurrentPage));
+
+            // Navigate to initial page
             Navigate(PageKeys.Raw);
         }
 
         #region Navigation
 
+        private void RegisterPages()
+        {
+            // Register all navigation pages with their factories
+            _navigationService.RegisterPage(PageKeys.Raw, () => new RawDataPage(RawVM));
+            _navigationService.RegisterPage(PageKeys.Diff, () => new GeneralReportPage(GenVM));
+            _navigationService.RegisterPage(PageKeys.Sum, () => new RelativeSettlementsPage(RelVM));
+            _navigationService.RegisterPage(PageKeys.Coord, () => new CoordinateExporting(RawVM));
+            _navigationService.RegisterPage(PageKeys.Graf, () =>
+                new DynamicsGrafficPage(new DynamicsGrafficViewModel(RawVM, _dynSvc)));
+        }
+
         private void Navigate(string? key)
         {
-            CurrentPage = key switch
-            {
-                PageKeys.Raw => new RawDataPage(RawVM),
-                PageKeys.Diff => new GeneralReportPage(GenVM),
-                PageKeys.Sum => new RelativeSettlementsPage(RelVM),
-                PageKeys.Coord => _coord ??= new CoordinateExporting(RawVM),
-                PageKeys.Graf => new DynamicsGrafficPage(new DynamicsGrafficViewModel(RawVM, _dynSvc)),
-                _ => CurrentPage
-            };
+            if (string.IsNullOrWhiteSpace(key)) return;
+            _navigationService.NavigateTo(key);
         }
 
         #endregion
