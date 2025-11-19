@@ -1,0 +1,43 @@
+{
+  "Cycle": 0,
+  "MaxNomen": null,
+  "MaxCalculated": null,
+  "RelNomen": null,
+  "RelCalculated": null,
+  "SelectedCycleHeader": "",
+  "DataRows": [],
+  "CoordRows": [
+    {
+      "Error": null,
+      "X": 90.26,
+      "Y": 355.16,
+      "Id": null
+    },
+    {
+      "Error": null,
+      "X": 174.45,
+      "Y": 313.49,
+      "Id": null
+    },
+    {
+      "Error": null,
+      "X": 89.41,
+      "Y": 247.84,
+      "Id": null
+    },
+    {
+      "Error": null,
+      "X": 245.89,
+      "Y": 257.19,
+      "Id": null
+    },
+    {
+      "Error": null,
+      "X": 174.45,
+      "Y": 203.1,
+      "Id": null
+    }
+  ],
+  "Objects": {},
+  "DwgPath": null
+}
