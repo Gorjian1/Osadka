@@ -107,6 +107,7 @@ namespace Osadka.ViewModels
         // === Команды ===
         private readonly Osadka.Services.Abstractions.ISettingsService _settings;
         private readonly Osadka.Services.Abstractions.IExcelImportService _excelImport;
+        private readonly Osadka.Services.Abstractions.IClipboardParserService _clipboardParser;
 
         public IRelayCommand OpenTemplate { get; }
         public IRelayCommand ChooseOrOpenTemplateCommand { get; }
@@ -117,10 +118,12 @@ namespace Osadka.ViewModels
 
         public RawDataViewModel(
             Osadka.Services.Abstractions.ISettingsService settings,
-            Osadka.Services.Abstractions.IExcelImportService excelImport)
+            Osadka.Services.Abstractions.IExcelImportService excelImport,
+            Osadka.Services.Abstractions.IClipboardParserService clipboardParser)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _excelImport = excelImport ?? throw new ArgumentNullException(nameof(excelImport));
+            _clipboardParser = clipboardParser ?? throw new ArgumentNullException(nameof(clipboardParser));
 
             OpenTemplate = new RelayCommand(OpenTemplatePicker);
             ChooseOrOpenTemplateCommand = new RelayCommand(ChooseOrOpenTemplate);
@@ -263,146 +266,43 @@ namespace Osadka.ViewModels
         {
             if (!Clipboard.ContainsText()) return;
 
-            var lines = Clipboard.GetText().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length == 0) return;
-            var first = lines[0].Split('\t');
-            int cols = first.Length;
+            var existingIds = DataRows.Select(r => r.Id).ToList();
+            var result = _clipboardParser.Parse(Clipboard.GetText(), Header.CycleNumber, existingIds, CoordUnit);
 
-            if (cols == 1)
+            switch (result.Type)
             {
-                int i = 0;
-                foreach (var ln in lines)
-                {
-                    if (i >= DataRows.Count) break;
-                    DataRows[i++].Id = ln.Trim();
-                }
-                return;
-            }
-
-            if (cols == 2)
-            {
-                CoordRows.Clear();
-                foreach (var ln in lines)
-                {
-                    var arr = ln.Split('\t');
-                    if (arr.Length < 2) continue;
-
-                    if (!double.TryParse(arr[0].Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out double x) ||
-                        !double.TryParse(arr[1].Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out double y))
-                        continue;
-
-                    CoordRows.Add(new CoordRow
+                case IClipboardParserService.ParseResult.DataType.Ids:
+                    // Обновляем ID существующих строк
+                    int i = 0;
+                    foreach (var id in result.Ids)
                     {
-                        X = UnitConverter.ToMm(x, Map(coordUnit)),
-                        Y = UnitConverter.ToMm(y, Map(coordUnit))
-                    });
-                }
-                OnPropertyChanged(nameof(ShowPlaceholder));
-                return;
+                        if (i >= DataRows.Count) break;
+                        DataRows[i++].Id = id;
+                    }
+                    break;
+
+                case IClipboardParserService.ParseResult.DataType.Coordinates:
+                    // Заменяем координаты
+                    CoordRows.Clear();
+                    foreach (var coord in result.Coordinates)
+                        CoordRows.Add(coord);
+                    OnPropertyChanged(nameof(ShowPlaceholder));
+                    break;
+
+                case IClipboardParserService.ParseResult.DataType.Measurements3:
+                case IClipboardParserService.ParseResult.DataType.Measurements4:
+                    // Заменяем данные измерений
+                    DataRows.Clear();
+                    foreach (var row in result.Measurements)
+                        DataRows.Add(row);
+                    UpdateCache();
+                    break;
+
+                case IClipboardParserService.ParseResult.DataType.None:
+                default:
+                    MessageBox.Show("Формат буфера не поддерживается (должно быть 1-4 колонок).");
+                    break;
             }
-
-            if (cols == 3)
-            {
-                DataRows.Clear();
-                int row = 0;
-                foreach (var ln in lines)
-                {
-                    var arr = ln.Split('\t');
-                    if (arr.Length < 3) continue;
-                    if (LooksLikeHeader(arr)) continue;
-
-                    var (markVal, markRaw) = TryParse(arr[0]);
-                    var (settlVal, settlRaw) = TryParse(arr[1]);
-                    var (totalVal, totalRaw) = TryParse(arr[2]);
-
-                    string id = (row < DataRows.Count) ? DataRows[row].Id : (row + 1).ToString();
-
-                    DataRows.Add(new MeasurementRow
-                    {
-                        Id = id,
-                        Mark = markVal,
-                        Settl = settlVal,
-                        Total = totalVal,
-                        MarkRaw = markRaw,
-                        SettlRaw = settlRaw,
-                        TotalRaw = totalRaw,
-                        Cycle = Header.CycleNumber
-                    });
-                    row++;
-                }
-                UpdateCache();
-                return;
-            }
-
-            if (cols == 4)
-            {
-                DataRows.Clear();
-                foreach (var ln in lines)
-                {
-                    var arr = ln.Split('\t');
-                    if (arr.Length < 4) continue;
-                    if (LooksLikeHeader(arr)) continue;
-
-                    string markRaw = arr[0];
-                    string settlRaw = arr[1];
-                    string totalRaw = arr[2];
-                    string id = arr[3].Trim();
-                    if (string.IsNullOrEmpty(id)) continue;
-
-                    var (markVal, _) = TryParse(markRaw);
-                    var (settlVal, _) = TryParse(settlRaw);
-                    var (totalVal, _) = TryParse(totalRaw);
-
-                    DataRows.Add(new MeasurementRow
-                    {
-                        Id = id,
-                        Mark = markVal,
-                        Settl = settlVal,
-                        Total = totalVal,
-                        MarkRaw = markRaw,
-                        SettlRaw = settlRaw,
-                        TotalRaw = totalRaw,
-                        Cycle = Header.CycleNumber
-                    });
-                }
-                UpdateCache();
-                return;
-            }
-
-            OnPropertyChanged(nameof(DataRows));
-            MessageBox.Show("Формат буфера не поддерживается (должно быть 1-4 колонок).");
-        }
-
-        private static (double? val, string raw) TryParse(string txt)
-        {
-            txt = txt.Trim();
-            if (Regex.IsMatch(txt, @"\bнов", RegexOptions.IgnoreCase))
-                return (0, txt);
-
-            if (double.TryParse(txt.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out double v))
-                return (v, txt);
-
-            return (null, txt);
-        }
-
-        private static bool LooksLikeHeader(string[] cells)
-        {
-            var joined = string.Join(" ", cells).ToLowerInvariant();
-            if (joined.Contains("отмет") || joined.Contains("осад") || joined.Contains("суммар") ||
-                joined.Contains("№") || joined.Contains("марка") || joined.Contains("cycle") || joined.Contains("id"))
-                return true;
-
-            int nonNumeric = 0;
-            for (int i = 0; i < cells.Length; i++)
-            {
-                var t = (cells[i] ?? string.Empty).Trim();
-                if (Regex.IsMatch(t, @"\bнов", RegexOptions.IgnoreCase))
-                    continue;
-
-                if (!double.TryParse(t.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out _))
-                    nonNumeric++;
-            }
-            return nonNumeric >= Math.Max(2, cells.Length - 1);
         }
 
         // === Импорт из Excel ===

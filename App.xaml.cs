@@ -61,6 +61,7 @@ namespace Osadka
             services.AddSingleton<IExportService, ExcelExportService>();
             services.AddSingleton<INavigationService, NavigationService>();
             services.AddSingleton<IExcelImportService, ExcelImportService>();
+            services.AddSingleton<IClipboardParserService, ClipboardParserService>();
 
             // Register existing services
             services.AddSingleton<GeneralReportService>();
