@@ -160,9 +160,6 @@
 
     </Grid>
     <Window.InputBindings>
-        <KeyBinding Key="V" Modifiers="Control" Command="{Binding PasteProxyCommand}" />
-        <KeyBinding Modifiers="Ctrl" Key="V"
-                Command="{Binding RawVM.PasteCommand}" />
         <KeyBinding Modifiers="Ctrl" Key="S"
                 Command="{Binding SaveProjectCommand}" />
     </Window.InputBindings>

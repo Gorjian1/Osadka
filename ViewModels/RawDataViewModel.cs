@@ -104,27 +104,23 @@ namespace Osadka.ViewModels
         // === Команды ===
         private readonly Osadka.Services.Abstractions.ISettingsService _settings;
         private readonly Osadka.Services.Abstractions.IExcelImportService _excelImport;
-        private readonly Osadka.Services.Abstractions.IClipboardParserService _clipboardParser;
         private readonly Osadka.Services.Abstractions.IMessageBoxService _messageBox;
         private readonly Osadka.Services.Abstractions.IFileDialogService _fileDialog;
 
         public IRelayCommand OpenTemplate { get; }
         public IRelayCommand ChooseOrOpenTemplateCommand { get; }
         public IRelayCommand ClearTemplateCommand { get; }
-        public IRelayCommand PasteCommand { get; }
         public IRelayCommand LoadFromWorkbookCommand { get; }
         public IRelayCommand ClearCommand { get; }
 
         public RawDataViewModel(
             Osadka.Services.Abstractions.ISettingsService settings,
             Osadka.Services.Abstractions.IExcelImportService excelImport,
-            Osadka.Services.Abstractions.IClipboardParserService clipboardParser,
             Osadka.Services.Abstractions.IMessageBoxService messageBox,
             Osadka.Services.Abstractions.IFileDialogService fileDialog)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _excelImport = excelImport ?? throw new ArgumentNullException(nameof(excelImport));
-            _clipboardParser = clipboardParser ?? throw new ArgumentNullException(nameof(clipboardParser));
             _messageBox = messageBox ?? throw new ArgumentNullException(nameof(messageBox));
             _fileDialog = fileDialog ?? throw new ArgumentNullException(nameof(fileDialog));
 
@@ -132,7 +128,6 @@ namespace Osadka.ViewModels
             ChooseOrOpenTemplateCommand = new RelayCommand(ChooseOrOpenTemplate);
             ClearTemplateCommand = new RelayCommand(ClearTemplate, () => HasCustomTemplate);
 
-            PasteCommand = new RelayCommand(OnPaste);
             LoadFromWorkbookCommand = new RelayCommand(OnLoadWorkbook);
             ClearCommand = new RelayCommand(OnClear);
 
@@ -269,50 +264,6 @@ namespace Osadka.ViewModels
                     "Шаблон",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
-            }
-        }
-
-        // === Вставка из буфера ===
-        private void OnPaste()
-        {
-            if (!Clipboard.ContainsText()) return;
-
-            var existingIds = DataRows.Select(r => r.Id).ToList();
-            var result = _clipboardParser.Parse(Clipboard.GetText(), Header.CycleNumber, existingIds, Map(CoordUnit));
-
-            switch (result.Type)
-            {
-                case IClipboardParserService.ParseResult.DataType.Ids:
-                    // Обновляем ID существующих строк
-                    int i = 0;
-                    foreach (var id in result.Ids)
-                    {
-                        if (i >= DataRows.Count) break;
-                        DataRows[i++].Id = id;
-                    }
-                    break;
-
-                case IClipboardParserService.ParseResult.DataType.Coordinates:
-                    // Заменяем координаты
-                    CoordRows.Clear();
-                    foreach (var coord in result.Coordinates)
-                        CoordRows.Add(coord);
-                    OnPropertyChanged(nameof(ShowPlaceholder));
-                    break;
-
-                case IClipboardParserService.ParseResult.DataType.Measurements3:
-                case IClipboardParserService.ParseResult.DataType.Measurements4:
-                    // Заменяем данные измерений
-                    DataRows.Clear();
-                    foreach (var row in result.Measurements)
-                        DataRows.Add(row);
-                    UpdateCache();
-                    break;
-
-                case IClipboardParserService.ParseResult.DataType.None:
-                default:
-                    _messageBox.Show("Формат буфера не поддерживается (должно быть 1-4 колонок).");
-                    break;
             }
         }
 

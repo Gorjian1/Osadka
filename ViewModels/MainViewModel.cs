@@ -46,7 +46,6 @@ namespace Osadka.ViewModels
         public IRelayCommand SaveProjectCommand { get; }
         public IRelayCommand SaveAsProjectCommand { get; }
         public IRelayCommand QuickReportCommand { get; }
-        public IRelayCommand PasteProxyCommand { get; }
 
         private readonly HashSet<MeasurementRow> _trackedMeasurementRows = new();
         private readonly HashSet<CoordRow> _trackedCoordRows = new();
@@ -153,15 +152,6 @@ namespace Osadka.ViewModels
             SaveProjectCommand = new RelayCommand(SaveProject, () => _isDirty);
             SaveAsProjectCommand = new RelayCommand(SaveAsProject);
             QuickReportCommand = new RelayCommand(DoQuickExport, () => GenVM.Report != null);
-            PasteProxyCommand = new RelayCommand(
-                () => RawVM.PasteCommand.Execute(null),
-                () => RawVM.PasteCommand.CanExecute(null));
-
-            RawVM.PasteCommand.CanExecuteChanged += (_, _) =>
-            {
-                if (PasteProxyCommand is RelayCommand pasteRelay)
-                    pasteRelay.NotifyCanExecuteChanged();
-            };
 
             GenVM.PropertyChanged += (_, e) =>
             {
