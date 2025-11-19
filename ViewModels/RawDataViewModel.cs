@@ -6,7 +6,9 @@ using Microsoft.VisualBasic;
 using Microsoft.Win32;
 using Osadka.Messages;
 using Osadka.Models;
-using Osadka.Services;
+using Osadka.Models.Cycles;
+using Osadka.Services.Data;
+using Osadka.Services.Settings;
 using Osadka.Core.Units; // Unit, UnitConverter
 using System;
 using System.Collections.Generic;
@@ -23,261 +25,6 @@ using System.Windows.Media; // в верхней части файла уже п
 
 namespace Osadka.ViewModels
 {
-    public enum CycleStateKind
-    {
-        Missing,
-        Measured,
-        New,
-        NoAccess,
-        Destroyed,
-        Text
-    }
-
-    public partial class CycleState : ObservableObject
-    {
-        public CycleState(int cycleNumber, CycleStateKind kind, string? annotation)
-        {
-            CycleNumber = cycleNumber;
-            Kind = kind;
-            Annotation = annotation;
-        }
-
-        public int CycleNumber { get; }
-        public CycleStateKind Kind { get; }
-        public string? Annotation { get; }
-        public bool HasData => Kind != CycleStateKind.Missing;
-
-        [ObservableProperty]
-        private Brush _brush = Brushes.Transparent;
-    }
-
-
-
-    public partial class CycleSegment : ObservableObject
-    {
-        public CycleSegment(int startIndex, int endIndex, int cycleFrom, int cycleTo, CycleStateKind kind, string? annotation)
-        {
-            StartIndex = startIndex;
-            Span = endIndex - startIndex + 1;
-            CycleFrom = cycleFrom;
-            CycleTo = cycleTo;
-            Kind = kind;
-            Annotation = annotation;
-        }
-
-        public int StartIndex { get; }
-        public int Span { get; }
-        public int CycleFrom { get; }
-        public int CycleTo { get; }
-        public CycleStateKind Kind { get; }
-        public string? Annotation { get; }
-
-        [ObservableProperty] private Brush _brush = Brushes.Transparent;
-    }
-
-    public partial class CycleMeaningGroup : ObservableObject, IDisposable
-    {
-        public CycleMeaningGroup(CycleStateGroup owner, CycleStateKind kind, IEnumerable<CycleSegment> segments)
-        {
-            Owner = owner ?? throw new ArgumentNullException(nameof(owner));
-            Kind = kind;
-            Segments = new ObservableCollection<CycleSegment>(segments ?? Enumerable.Empty<CycleSegment>());
-            Title = ComposeTitle();
-            Owner.PropertyChanged += OwnerOnPropertyChanged;
-        }
-
-        public CycleStateGroup Owner { get; }
-
-        public CycleStateKind Kind { get; }
-
-        public ObservableCollection<CycleSegment> Segments { get; }
-
-        [ObservableProperty]
-        private string _title = string.Empty;
-
-        [ObservableProperty]
-        private int _displayOrder;
-
-        public bool IsAlternateRow => DisplayOrder % 2 == 1;
-
-        public bool IsFirstRow => DisplayOrder == 0;
-
-        public string Meaning => Kind switch
-        {
-            CycleStateKind.Measured => "Измерено",
-            CycleStateKind.New => "Новая точка",
-            CycleStateKind.NoAccess => "Нет доступа",
-            CycleStateKind.Destroyed => "Уничтожена",
-            CycleStateKind.Text => "Особая отметка",
-            CycleStateKind.Missing => "Нет данных",
-            _ => Kind.ToString()
-        };
-
-        private string ComposeTitle()
-        {
-            string prefix = string.IsNullOrWhiteSpace(Owner.DisplayName)
-                ? string.Empty
-                : Owner.DisplayName + " — ";
-
-            return prefix + Meaning;
-        }
-
-        private void OwnerOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
-        {
-            if (e.PropertyName == nameof(CycleStateGroup.DisplayName))
-                Title = ComposeTitle();
-        }
-
-        partial void OnDisplayOrderChanged(int value)
-        {
-            OnPropertyChanged(nameof(IsAlternateRow));
-            OnPropertyChanged(nameof(IsFirstRow));
-        }
-
-        public void Dispose()
-        {
-            Owner.PropertyChanged -= OwnerOnPropertyChanged;
-        }
-    }
-
-    public partial class CycleStateGroup : ObservableObject
-    {
-        public CycleStateGroup(string key, IEnumerable<CycleState> states)
-        {
-            Key = key;
-            States = new ObservableCollection<CycleState>(states);
-        }
-
-        public string Key { get; }
-
-        [ObservableProperty]
-        private string _displayName = string.Empty;
-
-        public ObservableCollection<string> PointIds { get; } = new();
-
-        public ObservableCollection<CycleState> States { get; }
-
-        // Отрезки для Ганта (склеенные одинаковые статусы без Missing)
-        public ObservableCollection<CycleSegment> Segments { get; } = new();
-
-        // Разделение отрезков по смыслу (типу статуса)
-        public ObservableCollection<CycleMeaningGroup> MeaningGroups { get; } = new();
-
-        [ObservableProperty]
-        private bool _isEnabled = true;
-
-        private bool _suppressColorFlag;
-
-        [ObservableProperty]
-        private Color _accentColor = Color.FromRgb(0x4C, 0xAF, 0x50);
-
-        [ObservableProperty]
-        private bool _hasCustomColor;
-
-        public SolidColorBrush AccentBrush => new SolidColorBrush(AccentColor);
-
-        public void SetAccentColor(Color color, bool markCustom)
-        {
-            _suppressColorFlag = true;
-            AccentColor = color;
-            HasCustomColor = markCustom;
-            _suppressColorFlag = false;
-            OnPropertyChanged(nameof(AccentBrush));
-        }
-
-        partial void OnAccentColorChanged(Color value)
-        {
-            if (!_suppressColorFlag)
-            {
-                HasCustomColor = true;
-            }
-
-            OnPropertyChanged(nameof(AccentBrush));
-        }
-
-        public void RebuildSegments()
-        {
-            foreach (var meaning in MeaningGroups)
-                meaning.Dispose();
-
-            MeaningGroups.Clear();
-            Segments.Clear();
-            if (States.Count == 0)
-                return;
-
-            int start = 0;
-            var kind = States[0].Kind;
-            string? ann = States[0].Annotation;
-
-            var segments = new List<CycleSegment>();
-
-            for (int i = 1; i < States.Count; i++)
-            {
-                var s = States[i];
-                if (s.Kind == kind) continue;
-
-                if (kind != CycleStateKind.Missing)
-                    segments.Add(new CycleSegment(
-                        start, i - 1,
-                        States[start].CycleNumber,
-                        States[i - 1].CycleNumber,
-                        kind, ann));
-
-                start = i;
-                kind = s.Kind;
-                ann = s.Annotation;
-            }
-
-            if (kind != CycleStateKind.Missing)
-                segments.Add(new CycleSegment(
-                    start, States.Count - 1,
-                    States[start].CycleNumber,
-                    States[States.Count - 1].CycleNumber,
-                    kind, ann));
-
-            foreach (var segment in segments)
-                Segments.Add(segment);
-
-            if (segments.Count == 0)
-                return;
-
-            var order = new List<CycleStateKind>();
-            foreach (var segment in segments)
-            {
-                if (!order.Contains(segment.Kind))
-                    order.Add(segment.Kind);
-            }
-
-            foreach (var k in order)
-            {
-                var sameKind = segments.Where(s => s.Kind == k).ToList();
-                if (sameKind.Count == 0)
-                    continue;
-
-                MeaningGroups.Add(new CycleMeaningGroup(this, k, sameKind));
-            }
-        }
-
-        public void SortPointIds(IComparer<string> comparer)
-        {
-            if (comparer is null)
-                throw new ArgumentNullException(nameof(comparer));
-
-            if (PointIds.Count <= 1)
-                return;
-
-            var ordered = PointIds.OrderBy(id => id, comparer).ToList();
-
-            if (ordered.SequenceEqual(PointIds))
-                return;
-
-            PointIds.Clear();
-            foreach (var id in ordered)
-                PointIds.Add(id);
-        }
-    }
-
-
     public partial class RawDataViewModel : ObservableObject
     {
         private static readonly Regex PointIdNumberRegex = new("^\\s*(\\d+)", RegexOptions.Compiled);
@@ -297,12 +44,6 @@ namespace Osadka.ViewModels
         }
 
         [ObservableProperty] private string? drawingPath;
-
-        public class CycleDisplayItem
-        {
-            public int Number { get; set; }
-            public string Label { get; set; } = string.Empty;
-        }
 
         public ObservableCollection<CycleDisplayItem> CycleItems { get; } = new();
         public ObservableCollection<int> CycleNumbers { get; } = new();
@@ -332,15 +73,14 @@ namespace Osadka.ViewModels
         [ObservableProperty] private Unit sourceUnit = Unit.Millimeter;
 
         // Для совместимости с существующей разметкой, если она привязана к CoordUnit
-        public enum CoordUnits { Millimeters, Centimeters, Decimeters, Meters }
-        public IReadOnlyList<CoordUnits> CoordUnitValues { get; } =
-            Enum.GetValues(typeof(CoordUnits)).Cast<CoordUnits>().ToList();
+        public IReadOnlyList<Services.Data.CoordUnits> CoordUnitValues { get; } =
+            Enum.GetValues(typeof(Services.Data.CoordUnits)).Cast<Services.Data.CoordUnits>().ToList();
 
         [ObservableProperty]
-        private CoordUnits coordUnit = CoordUnits.Millimeters;
+        private Services.Data.CoordUnits coordUnit = Services.Data.CoordUnits.Millimeters;
 
         // Преобразование старых значений в новые через отношение масштабов
-        partial void OnCoordUnitChanged(CoordUnits oldVal, CoordUnits newVal)
+        partial void OnCoordUnitChanged(Services.Data.CoordUnits oldVal, Services.Data.CoordUnits newVal)
         {
             var oldU = Map(oldVal);
             var newU = Map(newVal);
@@ -363,12 +103,13 @@ namespace Osadka.ViewModels
 
         // Удобные аксессоры
         public double CoordScale => UnitConverter.ToMm(1.0, Map(coordUnit)); // 1 <ед.> → мм
-        private static Unit Map(CoordUnits u) => u switch
+        private static Unit Map(Services.Data.CoordUnits u) => u switch
         {
-            CoordUnits.Millimeters => Unit.Millimeter,
-            CoordUnits.Centimeters => Unit.Centimeter,
-            CoordUnits.Decimeters => Unit.Decimeter,
-            _ => Unit.Meter
+            Services.Data.CoordUnits.Millimeters => Unit.Millimeter,
+            Services.Data.CoordUnits.Centimeters => Unit.Centimeter,
+            Services.Data.CoordUnits.Decimeters => Unit.Decimeter,
+            Services.Data.CoordUnits.Meters => Unit.Meter,
+            _ => Unit.Millimeter
         };
 
         // === Кеш по объектам/циклам ===
@@ -689,7 +430,7 @@ namespace Osadka.ViewModels
 
             try
             {
-                using var stream = OpenWorkbookStream(filePath);
+                using var stream = ExcelImportService.OpenWorkbookStream(filePath);
                 using var wb = new XLWorkbook(stream);
 
                 var dlg = new Osadka.Views.ImportSelectionWindow(wb)
@@ -700,62 +441,36 @@ namespace Osadka.ViewModels
 
                 IXLWorksheet ws = dlg.SelectedWorksheet?.Sheet ?? throw new InvalidOperationException("Не выбран лист Excel.");
 
-                var objHeaders = dlg.ObjectHeaders;
-                var cycleStarts = dlg.CycleStarts;
-                int objIdx = dlg.SelectedObjectIndex;   // 1-based
-                int cycleIdx = dlg.SelectedCycleIndex;  // 1-based
+                var importer = new ExcelImportService(coordUnit);
+                var result = importer.ImportFromWorkbook(
+                    ws,
+                    dlg.ObjectHeaders,
+                    dlg.CycleStarts,
+                    dlg.SelectedObjectIndex,
+                    dlg.SelectedCycleIndex);
 
-                if (objHeaders == null || objHeaders.Count == 0) objHeaders = FindObjectHeaders(ws);
-                if (objHeaders == null || objHeaders.Count == 0)
-                    throw new InvalidOperationException("Не удалось найти заголовок с «№ точки» на листе.");
-
-                var hdrTuple = objIdx >= 1 && objIdx <= objHeaders.Count ? objHeaders[objIdx - 1] : objHeaders.First();
-                int idCol = hdrTuple.Cell.Address.ColumnNumber;
-                int subHdrRow = FindSubHeaderRow(ws, hdrTuple.Row, idCol);
-
-                if (cycleStarts == null || cycleStarts.Count == 0)
-                {
-                    var computed = FindCycleStarts(ws, subHdrRow, idCol);
-                    if (computed.Count == 0)
-                    {
-                        int lastRow = ws.LastRowUsed().RowNumber();
-                        for (int r = hdrTuple.Row; r <= Math.Min(hdrTuple.Row + 10, lastRow); r++)
-                        {
-                            bool anyOtm = ws.Row(r).Cells().Any(c => Regex.IsMatch(c.GetString(), @"^\s*Отметка", RegexOptions.IgnoreCase));
-                            if (anyOtm)
-                            {
-                                subHdrRow = r;
-                                computed = FindCycleStarts(ws, subHdrRow, idCol);
-                                if (computed.Count > 0) break;
-                            }
-                        }
-                    }
-                    cycleStarts = computed;
-                }
-
+                // Применяем результаты импорта
                 _cycleHeaders.Clear();
-                ReadAllObjects(ws, objHeaders, cycleStarts);
+                foreach (var kvp in result.CycleHeaders)
+                    _cycleHeaders[kvp.Key] = kvp.Value;
+
+                _objects.Clear();
+                foreach (var kvp in result.Objects)
+                    _objects[kvp.Key] = kvp.Value;
+
                 _disabledPoints.Clear();
 
                 ObjectNumbers.Clear();
-                foreach (var k in _objects.Keys.OrderBy(k => k)) ObjectNumbers.Add(k);
+                foreach (var num in result.ObjectNumbers)
+                    ObjectNumbers.Add(num);
 
-                Header.ObjectNumber = (objIdx >= 1 && objIdx <= ObjectNumbers.Count)
-                    ? ObjectNumbers[objIdx - 1]
-                    : (ObjectNumbers.Count > 0 ? ObjectNumbers[0] : 1);
+                Header.ObjectNumber = result.SelectedObjectNumber;
 
                 CycleNumbers.Clear();
-                if (_objects.TryGetValue(Header.ObjectNumber, out var cyclesForObject))
-                {
-                    foreach (var k in cyclesForObject.Keys.OrderBy(k => k)) CycleNumbers.Add(k);
-                }
+                foreach (var num in result.CycleNumbers)
+                    CycleNumbers.Add(num);
 
-                if (CycleNumbers.Count > 0)
-                {
-                    int idx = Math.Clamp(cycleIdx, 1, CycleNumbers.Count);
-                    int chosenNumber = CycleNumbers[idx - 1];
-                    Header.CycleNumber = chosenNumber;
-                }
+                Header.CycleNumber = result.SelectedCycleNumber;
 
                 RefreshData();
                 ActiveFilterChanged?.Invoke(this, EventArgs.Empty);
@@ -764,200 +479,6 @@ namespace Osadka.ViewModels
             {
                 MessageBox.Show($"Ошибка при импорте Excel:\n{ex.Message}", "Импорт", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-
-            // === Локальные функции ===
-            List<(int Row, IXLCell Cell)> FindObjectHeaders(IXLWorksheet sheet)
-                => sheet.RangeUsed()?
-                       .Rows()
-                       .Select(r =>
-                       {
-                           var hits = r.Cells().Where(c => Regex.IsMatch(c.GetString(), @"^\s*№\s*(точки|мар\w*)", RegexOptions.IgnoreCase));
-                           if (!hits.Any()) return (Row: 0, Cell: (IXLCell?)null);
-                           var leftMost = hits.OrderBy(c => c.Address.ColumnNumber).First();
-                           return (Row: r.RowNumber(), Cell: leftMost);
-                       })
-                       .Where(t => t.Cell != null && t.Row > 0)
-                       .ToList()
-                   ?? new List<(int Row, IXLCell Cell)>();
-
-            List<int> FindCycleStarts(IXLWorksheet sheet, int subHdrRow, int idColumn)
-                => sheet.Row(subHdrRow)
-                        .Cells()
-                        .Where(c => c.Address.ColumnNumber != idColumn && c.GetString().Trim().StartsWith("Отметка", StringComparison.OrdinalIgnoreCase))
-                        .Select(c => c.Address.ColumnNumber)
-                        .Distinct()
-                        .OrderBy(c => c)
-                        .ToList();
-
-            int FindSubHeaderRow(IXLWorksheet s, int headerRow, int idColumn)
-            {
-                int lastRow = s.LastRowUsed().RowNumber();
-                for (int r = headerRow + 1; r <= Math.Min(headerRow + 6, lastRow); r++)
-                {
-                    bool ok = s.Row(r).Cells().Any(c => c.Address.ColumnNumber != idColumn && c.GetString().Trim().StartsWith("Отметка", StringComparison.OrdinalIgnoreCase));
-                    if (ok) return r;
-                }
-                return headerRow + 1;
-            }
-
-            void ReadAllObjects(IXLWorksheet sheet, List<(int Row, IXLCell Cell)> headers, List<int> cycleCols)
-            {
-                _objects.Clear();
-                if (headers == null || headers.Count == 0) return;
-
-                headers = headers.OrderBy(h => h.Row).ToList();
-
-                for (int objNumber = 1; objNumber <= headers.Count; objNumber++)
-                {
-                    var hdr = headers[objNumber - 1];
-
-                    int idColLocal = hdr.Cell.Address.ColumnNumber;
-                    int subHdrRowLocal = FindSubHeaderRow(sheet, hdr.Row, idColLocal);
-
-                    int dataRowFirst = subHdrRowLocal + 1;
-                    int dataRowLast = (objNumber == headers.Count ? sheet.LastRowUsed().RowNumber() : headers[objNumber].Row - 1);
-
-                    var localCycCols = (cycleCols != null && cycleCols.Count > 0) ? cycleCols : FindCycleStarts(sheet, subHdrRowLocal, idColLocal);
-
-                    var cyclesDict = new Dictionary<int, List<MeasurementRow>>();
-
-                    foreach (var (cycIdx, startCol) in localCycCols.Select((c, i) => (i + 1, c)))
-                    {
-                        string cycLabel = BuildCycleHeaderLabel(sheet, startCol, subHdrRowLocal, hdr.Row);
-                        if (!string.IsNullOrWhiteSpace(cycLabel)) _cycleHeaders[cycIdx] = cycLabel;
-
-                        var rows = new List<MeasurementRow>();
-                        int blanksInARow = 0;
-
-                        for (int r = dataRowFirst; r <= dataRowLast; r++)
-                        {
-                            string idText = sheet.Cell(r, idColLocal).GetString().Trim();
-                            if (Regex.IsMatch(idText, @"^\s*№\s*(точки|мар\w*)", RegexOptions.IgnoreCase)) break;
-
-                            if (string.IsNullOrEmpty(idText))
-                            {
-                                blanksInARow++;
-                                if (blanksInARow >= 3) break;
-                                continue;
-                            }
-                            blanksInARow = 0;
-
-                            var (mark, markRaw) = ParseCell(sheet.Cell(r, startCol));
-                            var (settl, settlRaw) = ParseCell(sheet.Cell(r, startCol + 1));
-                            var (total, totalRaw) = ParseCell(sheet.Cell(r, startCol + 2));
-                            if (mark.HasValue) mark = UnitConverter.ToMm(mark.Value, Map(coordUnit));
-                            if (settl.HasValue) settl = UnitConverter.ToMm(settl.Value, Map(coordUnit));
-                            if (total.HasValue) total = UnitConverter.ToMm(total.Value, Map(coordUnit));
-                            if (mark is null && settl is null && total is null &&
-                                string.IsNullOrWhiteSpace(markRaw) && string.IsNullOrWhiteSpace(settlRaw) && string.IsNullOrWhiteSpace(totalRaw))
-                            {
-                                continue;
-                            }
-                            if (settl.HasValue) settl = Math.Round(settl.Value, 1);
-                            if (total.HasValue) total = Math.Round(total.Value, 1);
-
-                            rows.Add(new MeasurementRow
-                            {
-                                Id = idText,
-                                Mark = mark,
-                                Settl = settl,
-                                Total = total,
-                                MarkRaw = markRaw,
-                                SettlRaw = settlRaw,
-                                TotalRaw = totalRaw
-                            });
-                        }
-
-                        cyclesDict[cycIdx] = rows;
-                    }
-
-                    _objects[objNumber] = cyclesDict;
-                }
-            }
-
-            string BuildCycleHeaderLabel(IXLWorksheet sheet, int startCol, int subHdrRow, int headerRow)
-            {
-                string Read(IXLCell cell)
-                {
-                    var s = cell.GetString();
-                    if (!string.IsNullOrWhiteSpace(s)) return s;
-                    var mr = cell.MergedRange();
-                    return mr != null ? mr.FirstCell().GetString() : s;
-                }
-
-                int r1 = Math.Max(1, headerRow - 2);
-                int r2 = subHdrRow + 1;
-
-                // 1) Ищем только внутри текущей тройки (Отметка/Осадка/Общая)
-                for (int r = r1; r <= r2; r++)
-                {
-                    for (int c = startCol; c <= startCol + 2; c++)
-                    {
-                        var s = Read(sheet.Cell(r, c));
-                        if (!string.IsNullOrWhiteSpace(s) && Regex.IsMatch(s, @"^\s*Цикл\b", RegexOptions.IgnoreCase))
-                            return s.Trim();
-                    }
-                }
-
-                // 2) Фолбэк — центр-сначала (0,+1,-1,+2,-2,...)
-                int[] offs = new[] { 0, +1, -1, +2, -2, +3, -3 };
-                for (int r = r1; r <= r2; r++)
-                {
-                    foreach (var dc in offs)
-                    {
-                        int c = startCol + dc;
-                        if (c <= 0) continue;
-                        var s = Read(sheet.Cell(r, c));
-                        if (!string.IsNullOrWhiteSpace(s) && Regex.IsMatch(s, @"^\s*Цикл\b", RegexOptions.IgnoreCase))
-                            return s.Trim();
-                    }
-                }
-
-                return string.Empty;
-            }
-        }
-
-        private static FileStream OpenWorkbookStream(string filePath)
-        {
-            var shareModes = new[]
-            {
-                FileShare.ReadWrite | FileShare.Delete,
-                FileShare.ReadWrite,
-                FileShare.Read
-            };
-
-            IOException? lastError = null;
-            foreach (var share in shareModes)
-            {
-                for (int attempt = 0; attempt < 3; attempt++)
-                {
-                    try
-                    {
-                        return new FileStream(filePath, FileMode.Open, FileAccess.Read, share);
-                    }
-                    catch (IOException ex)
-                    {
-                        lastError = ex;
-                        if (attempt < 2)
-                            Thread.Sleep(100);
-                    }
-                }
-            }
-
-            throw lastError ?? new IOException($"Не удалось открыть файл '{filePath}'.");
-        }
-
-        private static (double? val, string raw) ParseCell(IXLCell cell)
-        {
-            string txt = cell.GetString().Trim();
-            if (Regex.IsMatch(txt, @"\bнов", RegexOptions.IgnoreCase)) return (0, txt);
-
-            if (cell.DataType == XLDataType.Number) return (cell.GetDouble(), txt);
-
-            if (double.TryParse(txt.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out double v))
-                return (v, txt);
-
-            return (null, txt);
         }
 
         public void RebuildCycleGroups()
@@ -998,7 +519,15 @@ namespace Osadka.ViewModels
                     .Select(cycle => CreateCycleState(cycle, perCycle.TryGetValue(cycle, out var row) ? row : null))
                     .ToList();
 
+                // Пропускаем точки без состояний (защита от поврежденных данных)
+                if (states.Count == 0)
+                    continue;
+
                 string key = BuildStateKey(states);
+
+                // Дополнительная защита от пустых ключей
+                if (string.IsNullOrEmpty(key))
+                    continue;
 
                 if (!grouped.TryGetValue(key, out var group))
                 {
@@ -1113,7 +642,7 @@ namespace Osadka.ViewModels
             foreach (var (cycle, rows) in cycles)
             {
                 var filtered = rows
-                    .Where(r => !_disabledPoints.Contains(r.Id))
+                    .Where(r => !_disabledPoints.Contains(r.Id) && r.IsAvailableForCalculations())
                     .ToList();
                 result[cycle] = filtered;
             }

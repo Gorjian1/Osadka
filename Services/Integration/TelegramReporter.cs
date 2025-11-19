@@ -2,7 +2,7 @@
 using System.Net.Http;
 using System.Threading.Tasks;
 
-namespace Osadka.Services
+namespace Osadka.Services.Integration
 {
     public static class TelegramReporter
     {

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Osadka.Models;
 
-namespace Osadka.Services
+namespace Osadka.Services.Reports
 {
     public record PointXY(int Cycle, double Mark);
     public record Series(string Id, IReadOnlyList<PointXY> Points);

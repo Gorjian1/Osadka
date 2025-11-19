@@ -3,7 +3,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 
-namespace Osadka.Services
+namespace Osadka.Services.Reports
 {
     public record Extremum(double Value, IReadOnlyList<string> Ids);
     public record GeneralReportData(

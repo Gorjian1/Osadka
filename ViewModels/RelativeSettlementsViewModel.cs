@@ -6,7 +6,7 @@ using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Osadka.Models;
-using Osadka.Services;
+using Osadka.Services.Reports;
 
 namespace Osadka.ViewModels
 {
@@ -62,8 +62,10 @@ namespace Osadka.ViewModels
             double spLim = _raw.Header.RelNomen ?? 0;
             double calcLim = _raw.Header.RelCalculated ?? 0;
 
-            // 1) Берём срез данных (включая прочерки)
-            var data = _raw.ActiveDataRows.ToList();
+            // 1) Берём срез данных и фильтруем точки недоступные в текущем цикле
+            var data = _raw.ActiveDataRows
+                .Where(r => r.IsAvailableForCalculations())
+                .ToList();
             var coordLookup = _raw.ActiveCoordRows.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
 
             // 2) ВЫРАВНИВАНИЕ ТОЛЬКО ПО ПОЗИЦИИ:

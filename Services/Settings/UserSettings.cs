@@ -4,7 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Text.Json;
 
-namespace Osadka.Services
+namespace Osadka.Services.Settings
 {
     /// <summary>
     /// Хранит пользовательские настройки (TemplatePath) в %AppData%\{Product}\user.settings.json
