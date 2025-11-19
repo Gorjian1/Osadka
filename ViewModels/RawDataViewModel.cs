@@ -31,8 +31,8 @@ namespace Osadka.ViewModels
         public bool HasCustomTemplate => !string.IsNullOrWhiteSpace(TemplatePath) && File.Exists(TemplatePath!);
         partial void OnTemplatePathChanged(string? value)
         {
-            UserSettings.Data.TemplatePath = value;
-            UserSettings.Save();
+            _settings.TemplatePath = value;
+            _settings.Save();
             OnPropertyChanged(nameof(HasCustomTemplate));
         }
 
@@ -105,6 +105,8 @@ namespace Osadka.ViewModels
         private readonly Dictionary<int, List<MeasurementRow>> _cycles = new();
 
         // === Команды ===
+        private readonly Osadka.Services.Abstractions.ISettingsService _settings;
+
         public IRelayCommand OpenTemplate { get; }
         public IRelayCommand ChooseOrOpenTemplateCommand { get; }
         public IRelayCommand ClearTemplateCommand { get; }
@@ -112,8 +114,10 @@ namespace Osadka.ViewModels
         public IRelayCommand LoadFromWorkbookCommand { get; }
         public IRelayCommand ClearCommand { get; }
 
-        public RawDataViewModel()
+        public RawDataViewModel(Osadka.Services.Abstractions.ISettingsService settings)
         {
+            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+
             OpenTemplate = new RelayCommand(OpenTemplatePicker);
             ChooseOrOpenTemplateCommand = new RelayCommand(ChooseOrOpenTemplate);
             ClearTemplateCommand = new RelayCommand(ClearTemplate, () => HasCustomTemplate);
@@ -122,8 +126,8 @@ namespace Osadka.ViewModels
             LoadFromWorkbookCommand = new RelayCommand(OnLoadWorkbook);
             ClearCommand = new RelayCommand(OnClear);
 
-            UserSettings.Load();
-            TemplatePath = UserSettings.Data.TemplatePath;
+            _settings.Load();
+            TemplatePath = _settings.TemplatePath;
 
             Header.PropertyChanged += Header_PropertyChanged;
             PropertyChanged += (_, e) =>
