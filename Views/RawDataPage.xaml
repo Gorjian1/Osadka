@@ -216,9 +216,6 @@
                         <Button Style="{StaticResource ToolbarAccentButton}" Content="📗 Загрузить Excel"
                                 Command="{Binding LoadFromWorkbookCommand}"/>
                         <Separator Margin="5,0"/>
-                        <Button Style="{StaticResource ToolbarAccentButton}" Content="Вставить (Ctrl+V)"
-                                Command="{Binding PasteCommand}"/>
-                        <Separator Margin="5,0"/>
                         <Button Style="{StaticResource ToolbarAccentButton}" Content="Очистить"
                                 Command="{Binding ClearCommand}"/>
                         <Separator Margin="8,0"/>

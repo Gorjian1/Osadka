@@ -1,37 +1,61 @@
-﻿using Microsoft.Win32;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Win32;
 using Osadka.Services;
+using Osadka.Services.Abstractions;
+using Osadka.Services.Implementation;
 using Osadka.ViewModels;
-using System.Configuration;
-using System.Data;
+using Serilog;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
+
 namespace Osadka
 {
     public partial class App : Application
     {
+        private ServiceProvider? _serviceProvider;
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            // Настройка Serilog
+            var logPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Osadka",
+                "logs",
+                "osadka-.log");
+
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .WriteTo.File(
+                    logPath,
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 7,
+                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+                .CreateLogger();
+
+            Log.Information("========================================");
+            Log.Information("Osadka запущена, версия {Version}", GetType().Assembly.GetName().Version);
+            Log.Information("========================================");
+
             if (!IsExtensionRegistered())
                 RegisterFileExtension();
             base.OnStartup(e);
 
-            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
-            TelegramReporter.SendAsync($"Crash (AppDomain):\n{(e.ExceptionObject as Exception)?.Message}").Wait();
-            this.DispatcherUnhandledException += (_, e) =>
-            {
-                //TelegramReporter.SendAsync($"Crash (UI):\n{e.Exception.Message}").Wait();
-                e.Handled = true;
-            };
-            TaskScheduler.UnobservedTaskException += (_, e) =>
-            {
-               // TelegramReporter.SendAsync($"Crash (Task):\n{e.Exception.Message}").Wait();
-                e.SetObserved();
-            };
+            // Global exception handlers
+            AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+            this.DispatcherUnhandledException += OnDispatcherUnhandledException;
+            TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+
+            // Configure Dependency Injection
+            var services = new ServiceCollection();
+            ConfigureServices(services);
+            _serviceProvider = services.BuildServiceProvider();
+
+            // Create MainWindow and ViewModel через DI
             var mainWindow = new MainWindow();
-            var vm = new MainViewModel();
+            var vm = _serviceProvider.GetRequiredService<MainViewModel>();
 
             if (e.Args is { Length: > 0 })
             {
@@ -47,7 +71,28 @@ namespace Osadka
             mainWindow.DataContext = vm;
             this.MainWindow = mainWindow;
             mainWindow.Show();
+        }
 
+        private void ConfigureServices(IServiceCollection services)
+        {
+            // Register services
+            services.AddSingleton<IMessageBoxService, MessageBoxService>();
+            services.AddSingleton<IFileDialogService, FileDialogService>();
+            services.AddSingleton<IFileService, FileService>();
+            services.AddSingleton<IProjectService, ProjectService>();
+            services.AddSingleton<ISettingsService, SettingsService>();
+            services.AddSingleton<IExportService, ExcelExportService>();
+            services.AddSingleton<INavigationService, NavigationService>();
+            services.AddSingleton<IExcelImportService, ExcelImportService>();
+
+            // Register existing services
+            services.AddSingleton<GeneralReportService>();
+            services.AddSingleton<RelativeReportService>();
+            services.AddSingleton<DynamicsReportService>();
+
+            // Register ViewModels
+            services.AddSingleton<RawDataViewModel>();
+            services.AddTransient<MainViewModel>(); // Transient для MainViewModel
         }
         private bool IsExtensionRegistered()
         {
@@ -106,24 +151,44 @@ namespace Osadka
             uint uFlags,
             IntPtr dwItem1,
             IntPtr dwItem2);
-    
+
         private void OnUnhandledException(object _, UnhandledExceptionEventArgs e)
         {
             if (e.ExceptionObject is Exception ex)
-                TelegramReporter.SendAsync($"Crash (AppDomain):\n{ex}").Wait();
+            {
+                Log.Fatal(ex, "Критическая необработанная ошибка (AppDomain.UnhandledException)");
+
+                var errorDetails = $"Критическая ошибка:\n{ex.Message}\n\n" +
+                                 $"Тип: {ex.GetType().Name}\n" +
+                                 $"Логи сохранены в: %AppData%\\Osadka\\logs";
+
+                MessageBox.Show(errorDetails, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void OnDispatcherUnhandledException(object _,
             System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
-            TelegramReporter.SendAsync($"Crash (UI):\n{e.Exception}").Wait();
+            Log.Error(e.Exception, "Необработанная ошибка UI (Dispatcher)");
+
+            var errorDetails = $"Ошибка UI:\n{e.Exception.Message}\n\n" +
+                             $"Логи сохранены в: %AppData%\\Osadka\\logs";
+
+            MessageBox.Show(errorDetails, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             e.Handled = true;
         }
 
         private void OnUnobservedTaskException(object _, UnobservedTaskExceptionEventArgs e)
         {
-            TelegramReporter.SendAsync($"Crash (Task):\n{e.Exception}").Wait();
+            Log.Error(e.Exception, "Необработанная ошибка асинхронной задачи (Task)");
             e.SetObserved();
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            Log.Information("Osadka завершена");
+            Log.CloseAndFlush();
+            base.OnExit(e);
         }
     }
 

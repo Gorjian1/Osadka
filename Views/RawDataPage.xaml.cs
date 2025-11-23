@@ -158,7 +158,7 @@ namespace Osadka.Views
             if (path == null) return;
 
             if (DataContext is RawDataViewModel vm)
-                vm.LoadWorkbookFromFile(path);
+                vm.ImportFromExcel(path);
         }
     }
 }
