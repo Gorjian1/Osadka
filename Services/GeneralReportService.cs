@@ -66,6 +66,7 @@ namespace Osadka.Services
 
                 var negs = vals.Where(v => v < 0).ToList();
                 var poss = vals.Where(v => v > 0).ToList();
+                var zeros = vals.Where(v => v == 0).ToList();
 
                 if (negs.Count > 0 && poss.Count > 0)
                     return $"{FormatSigned(negs.Min(), decimals)}/{FormatSigned(poss.Max(), decimals)}";
@@ -73,6 +74,8 @@ namespace Osadka.Services
                     return $"{FormatSigned(negs.Min(), decimals)}";
                 if (poss.Count > 0)
                     return $"{FormatSigned(poss.Max(), decimals)}";
+                if (zeros.Count > 0)
+                    return FormatSigned(0, decimals);
                 return "-";
             }
 
@@ -108,6 +111,10 @@ namespace Osadka.Services
                     var posIds = poss.Where(x => Math.Abs(x.V - maxPos) < 1e-9).Select(x => x.Id);
                     return JoinIdsOrDash(posIds);
                 }
+                // Все значения ровно 0 — вернуть их Id
+                var zeros = data.Where(x => Math.Abs(x.V) < 1e-9).ToList();
+                if (zeros.Count > 0)
+                    return JoinIdsOrDash(zeros.Select(x => x.Id));
                 return "-";
             }
 
