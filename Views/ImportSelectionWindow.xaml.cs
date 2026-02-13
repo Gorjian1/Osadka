@@ -156,9 +156,8 @@ namespace Osadka.Views
             int subHeaderRow = FindSubHeaderRow(ws, headerRow, idColLeft);
             var starts = FindCycleStartsV2(ws, headerRow, subHeaderRow, idColLeft); // ASC по колонке
 
-            // порядок = как в ComboBox (правый цикл первый)
+            // Порядок ASC — совпадает с ординальной нумерацией CycleItem.Index
             CycleStarts = starts
-                .OrderByDescending(s => s.StartColumn)
                 .Select(s => s.StartColumn)
                 .ToList();
 
