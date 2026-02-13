@@ -87,10 +87,20 @@ namespace Osadka.ViewModels
             string exeDir = AppContext.BaseDirectory;
             string docx = Path.Combine(exeDir, "help.docx");
 
-            if (_fileService.FileExists(docx))
+            if (!_fileService.FileExists(docx))
+            {
+                _messageBox.Show("Файл справки help.docx не найден в папке приложения.", "Справка");
+                return;
+            }
+
+            try
+            {
                 _fileService.OpenInDefaultApp(docx);
-            else
-                _messageBox.Show("Файл справки не найден.", "Справка");
+            }
+            catch (Exception ex)
+            {
+                _messageBox.Show($"Не удалось открыть справку:\n{ex.Message}", "Справка");
+            }
         }
 
         public MainViewModel(
