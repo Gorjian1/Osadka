@@ -35,9 +35,19 @@ public partial class MeasurementRow : ObservableObject
         if (!string.IsNullOrWhiteSpace(MarkRaw) && !Mark.HasValue)
             return false;
 
+        // Если MarkRaw содержит статус "новая", точка невалидна (ParseCell присваивает 0 для "нов")
+        if (!string.IsNullOrWhiteSpace(MarkRaw) &&
+            MarkRaw.Contains("нов", System.StringComparison.OrdinalIgnoreCase))
+            return false;
+
         // Если SettlRaw содержит статус "новая", это новая точка - невалидна для расчёта осадки
         if (!string.IsNullOrWhiteSpace(SettlRaw) &&
             SettlRaw.Contains("нов", System.StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Если TotalRaw содержит статус "новая", точка невалидна
+        if (!string.IsNullOrWhiteSpace(TotalRaw) &&
+            TotalRaw.Contains("нов", System.StringComparison.OrdinalIgnoreCase))
             return false;
 
         // Если TotalRaw содержит "-" или другой текст, а Total null - невалидна

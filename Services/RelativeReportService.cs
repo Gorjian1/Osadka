@@ -83,9 +83,14 @@ namespace Osadka.Services
             }
 
             // Превышения считаем только по валидным ratio
+            // Лимит выключен (≤0 или не задан) — не считаем превышения
             var valid = all.Where(r => IsFinite(r.Ratio)).ToList();
-            var excSp = valid.Where(r => Math.Abs(r.Ratio) > limitSp).ToList();
-            var excCalc = valid.Where(r => Math.Abs(r.Ratio) > limitCalc).ToList();
+            var excSp = (IsFinite(limitSp) && limitSp > 0)
+                ? valid.Where(r => Math.Abs(r.Ratio) > limitSp).ToList()
+                : new List<RelativeRow>();
+            var excCalc = (IsFinite(limitCalc) && limitCalc > 0)
+                ? valid.Where(r => Math.Abs(r.Ratio) > limitCalc).ToList()
+                : new List<RelativeRow>();
 
             // Максимум по модулю
             Extremum maxRel;

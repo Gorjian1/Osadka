@@ -71,7 +71,7 @@ namespace Osadka.ViewModels
                 PlotModel.Series.Add(ls);
             }
 
-            PlotModel.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "Отметка, м" });
+            PlotModel.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "Суммарная осадка, мм" });
             PlotModel.Axes.Add(new LinearAxis { Position = AxisPosition.Bottom, Title = "Цикл №", MinimumPadding = .1 });
 
             PlotModel.InvalidatePlot(true);

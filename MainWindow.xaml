@@ -96,17 +96,8 @@
                     </MenuItem>
 
                     <Separator Width="6"/>
-                    <MenuItem Header="_Справка"
-
-          Command="{Binding HelpCommand}">
-                        <Separator Width="6"/>
-
-                        <MenuItem.HeaderTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="Справка"/>
-                            </DataTemplate>
-                        </MenuItem.HeaderTemplate>
-                    </MenuItem>
+                    <MenuItem Header="Справка"
+                              Command="{Binding HelpCommand}"/>
                     <TextBlock Text="{x:Static local:VersionProvider.Current}" />
                 </Menu>
             </DockPanel>
