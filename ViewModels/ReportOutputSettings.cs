@@ -51,7 +51,7 @@ namespace Osadka.ViewModels
             });
             Blocks.Add(new BlockSetting
             {
-                Key = "MaxCycle",
+                Key = "MaxSettl",
                 Tags = new() { "/сеттмин", "/сеттминId" },
                 IsEnabled = true
             });
@@ -70,7 +70,7 @@ namespace Osadka.ViewModels
             Blocks.Add(new BlockSetting
             {
                 Key = "Exceeds",
-                Tags = new() { "/общ>сп", "/отн>сп", "/общ>расч", "/отн>сасч"},
+                Tags = new() { "/общ>сп", "/отн>сп", "/общ>расч", "/отн>расч"},
                 IsEnabled = true
             });
         }

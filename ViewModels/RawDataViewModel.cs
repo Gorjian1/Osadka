@@ -73,7 +73,7 @@ namespace Osadka.ViewModels
         {
             var oldU = Map(oldVal);
             var newU = Map(newVal);
-            double k = UnitConverter.ToMm(1.0, newU) / UnitConverter.ToMm(1.0, oldU);
+            double k = UnitConverter.ToMm(1.0, oldU) / UnitConverter.ToMm(1.0, newU);
 
             foreach (var p in CoordRows)
             {
@@ -204,6 +204,7 @@ namespace Osadka.ViewModels
             DataRows.Clear();
             CoordRows.Clear();
             _cycles.Clear();
+            _objects.Clear();
             OnPropertyChanged(nameof(ShowPlaceholder));
         }
 

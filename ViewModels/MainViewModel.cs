@@ -750,10 +750,10 @@ namespace Osadka.ViewModels
                 ["/общэкстрId"] = DashIfEmpty(r.TotalExtremaIds),
                 ["/сеттэкстрId"] = DashIfEmpty(r.SettlExtremaIds),
 
-                ["/общср"] = $"{r.AvgTotal:F1}",
+                ["/общср"] = r.AvgTotal is double avgT ? $"{avgT:F1}" : "-",
                 ["/сеттмакс"] = $"{r.MaxSettl.Value:F1}",
                 ["/сеттмаксId"] = JoinOrDash(r.MaxSettl.Ids),
-                ["/сеттср"] = $"{r.AvgSettl:F1}",
+                ["/сеттср"] = r.AvgSettl is double avgS ? $"{avgS:F1}" : "-",
 
                 ["/нетдоступа"] = JoinOrDash(r.NoAccessIds),
                 ["/уничтожены"] = JoinOrDash(r.DestroyedIds),
